@@ -3,157 +3,132 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>墨知 - 书法智能助手</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-            background: #f5f0e8;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 40px 20px;
-        }
-        
-        h1 {
-            color: #2c1810;
-            font-size: 2.5em;
-            margin-bottom: 10px;
-        }
-        
-        .subtitle {
-            color: #8b7355;
-            margin-bottom: 40px;
-        }
-        
-        .chat-container {
-            width: 100%;
-            max-width: 600px;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 2px 20px rgba(0,0,0,0.08);
-            padding: 30px;
-        }
-        
-        .input-area {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-        
-        input {
-            flex: 1;
-            padding: 12px 16px;
-            border: 2px solid #e0d5c5;
-            border-radius: 8px;
-            font-size: 16px;
-            outline: none;
-            transition: border-color 0.3s;
-        }
-        
-        input:focus {
-            border-color: #8b6914;
-        }
-        
-        button {
-            padding: 12px 24px;
-            background: #8b6914;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            cursor: pointer;
-            transition: background 0.3s;
-        }
-        
-        button:hover {
-            background: #6b5010;
-        }
-        
-        button:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-        }
-        
-        #answer {
-            padding: 20px;
-            background: #faf8f5;
-            border-radius: 8px;
-            min-height: 100px;
-            line-height: 1.8;
-            color: #333;
-            white-space: pre-wrap;
-        }
-        
-        .loading {
-            color: #999;
-            font-style: italic;
-        }
-        
-        .error {
-            color: #c0392b;
-        }
-    </style>
+    <meta name="description" content="墨智 - 中国书法学习与创作智能助手">
+    <title>墨智 - 书法学习与创作智能助手</title>
+    <link rel="stylesheet" href="./css/reset.css">
+    <link rel="stylesheet" href="./css/variables.css">
+    <link rel="stylesheet" href="./css/layout.css">
+    <link rel="stylesheet" href="./css/components.css">
 </head>
 <body>
-    <h1>🖌️ 墨知</h1>
-    <p class="subtitle">书法智能助手</p>
-    
-    <div class="chat-container">
-        <div class="input-area">
-            <input 
-                type="text" 
-                id="question" 
-                placeholder="请输入书法问题，如：颜真卿是谁？"
-                onkeypress="if(event.key==='Enter')ask()"
-            >
-            <button id="submitBtn" onclick="ask()">提问</button>
-        </div>
-        <div id="answer">请输入问题，开始探索书法世界...</div>
+    <div class="app-shell">
+        <aside class="sidebar" id="sidebar" aria-label="墨智侧边栏">
+            <div class="sidebar__brand">
+                <div class="brand-mark" aria-hidden="true">🖌️</div>
+                <div>
+                    <h1>墨智</h1>
+                    <p>书法学习与创作智能助手</p>
+                </div>
+            </div>
+
+            <nav class="sidebar__nav" aria-label="主导航">
+                <button class="nav-item nav-item--active" type="button" data-nav="practice">✒️ 新建练习</button>
+                <button class="nav-item" type="button" data-nav="search">🔍 书法搜索</button>
+                <button class="nav-item" type="button" data-nav="favorites">📌 收藏作品</button>
+                <button class="nav-item" type="button" data-nav="recent">🕰 最近学习</button>
+            </nav>
+
+            <div class="sidebar__section">
+                <h2>作品典藏</h2>
+                <ul class="history-list" id="classicWorks"></ul>
+            </div>
+
+            <div class="sidebar__section">
+                <h2>最近练习</h2>
+                <ul class="history-list" id="recentPractices"></ul>
+            </div>
+
+            <div class="user-card">
+                <div class="user-card__avatar" aria-hidden="true">墨</div>
+                <div>
+                    <strong>书墨雅士</strong>
+                    <span>🌿 进阶学习计划</span>
+                </div>
+            </div>
+        </aside>
+
+        <div class="sidebar-scrim" id="sidebarScrim" hidden></div>
+
+        <main class="workspace">
+            <header class="topbar">
+                <button class="icon-button menu-button" id="menuButton" type="button" aria-label="打开侧边栏">☰</button>
+                <button class="model-selector" type="button" aria-label="选择模型">🖌️ 墨韵·书法大师</button>
+                <div class="topbar__actions">
+                    <button class="soft-button" type="button">✨ 专业版</button>
+                    <button class="soft-button" type="button">📜 临时练习</button>
+                </div>
+            </header>
+
+            <section class="chat-panel" aria-label="AI 对话区域">
+                <div class="chat-scroll" id="chatScroll">
+                    <section class="welcome">
+                        <p class="welcome__eyebrow">AI Calligraphy Studio</p>
+                        <h2>欢迎来到墨智</h2>
+                        <p class="welcome__subtitle">以笔传心，以墨修身</p>
+                        <p class="welcome__text">让 AI 陪你学习千年书法。</p>
+                    </section>
+
+                    <section class="analysis-card" aria-label="书法分析案例">
+                        <div class="analysis-card__header">
+                            <span class="seal">鉴</span>
+                            <div>
+                                <h3>《兰亭序》结构分析</h3>
+                                <p>行书 · 王羲之</p>
+                            </div>
+                        </div>
+                        <dl class="analysis-meta">
+                            <div>
+                                <dt>字体</dt>
+                                <dd>行书</dd>
+                            </div>
+                            <div>
+                                <dt>作者</dt>
+                                <dd>王羲之</dd>
+                            </div>
+                        </dl>
+                        <blockquote>
+                            此字横画舒展，转折自然，体现魏晋书风的洒脱与灵动。
+                        </blockquote>
+                    </section>
+
+                    <section class="feature-reserve" aria-label="作品分析预留区域">
+                        <div>
+                            <h3>作品智能分析</h3>
+                            <p>预留图片上传、AI 评分、笔画分析、OCR 与 Agent 调用能力。</p>
+                        </div>
+                        <div class="score-preview" aria-label="AI评分预览">
+                            <span>AI 评分</span>
+                            <strong>92</strong>
+                        </div>
+                    </section>
+
+                    <div class="message-list" id="messageList" aria-live="polite"></div>
+                </div>
+
+                <div class="composer-wrap">
+                    <div class="quick-chips" id="quickChips" aria-label="快捷功能">
+                        <button type="button" data-prompt="请分析我的书法作品，并从章法、结构、用笔三方面给出建议。">分析我的书法作品</button>
+                        <button type="button" data-prompt="请为我制定一份楷书入门学习路径，包含笔画、结构和临帖安排。">指导楷书入门</button>
+                        <button type="button" data-prompt="请根据我的水平生成一份七天临帖计划。">生成临帖计划</button>
+                        <button type="button" data-prompt="请评价我的字，指出最需要改进的三个问题。">评价我的字</button>
+                    </div>
+
+                    <form class="composer" id="composer">
+                        <textarea id="messageInput" rows="1" placeholder="上传作品或输入你的书法问题……" aria-label="输入书法问题"></textarea>
+                        <div class="composer__actions">
+                            <button class="tool-button" id="uploadButton" type="button">📎 上传作品</button>
+                            <button class="tool-button" id="imageAnalyzeButton" type="button">🖼️ 图片分析</button>
+                            <button class="tool-button" id="voiceButton" type="button">🎙️ 语音输入</button>
+                            <button class="send-button" type="submit" aria-label="发送">➤</button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+        </main>
     </div>
 
-    <script>
-        async function ask() {
-            const input = document.getElementById('question');
-            const btn = document.getElementById('submitBtn');
-            const answer = document.getElementById('answer');
-            
-            const q = input.value.trim();
-            if (!q) {
-                answer.innerText = '请先输入问题';
-                return;
-            }
-            
-            btn.disabled = true;
-            answer.innerText = '正在思考...';
-            answer.className = 'loading';
-            
-            try {
-                const res = await fetch(
-                    `http://127.0.0.1:8000/chat?question=${encodeURIComponent(q)}`,
-                    { method: 'POST' }
-                );
-                
-                if (!res.ok) {
-                    throw new Error('服务器响应错误：' + res.status);
-                }
-                
-                const data = await res.json();
-                answer.innerText = data.answer || '未收到回答';
-                answer.className = '';
-            } catch (err) {
-                answer.innerText = '出错啦：' + err.message + '\n\n请确认：\n1. 后端服务已启动（python -m uvicorn backend.app.main:app --reload）\n2. Ollama 已运行（ollama run qwen2.5:3b）';
-                answer.className = 'error';
-            } finally {
-                btn.disabled = false;
-            }
-        }
-    </script>
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+    <script type="module" src="./js/main.js"></script>
 </body>
 </html>
