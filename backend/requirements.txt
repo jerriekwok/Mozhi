@@ -1,0 +1,9 @@
+//配置模板
+fastapi
+uvicorn[standard]
+python-dotenv
+requests
+httpx
+pytest
+ruff
+
