@@ -12,9 +12,13 @@ mimetypes.add_type('application/javascript', '.js')
 mimetypes.add_type('application/javascript', '.mjs')
 
 FRONTEND_PORT = 8080
+<<<<<<< Updated upstream
 BACKEND_PORT = 8000
 START_BACKEND = os.getenv('MOZHI_START_BACKEND', '1') != '0'
 REQUIRE_BACKEND = os.getenv('MOZHI_REQUIRE_BACKEND', '0') == '1'
+=======
+BACKEND_PORT = 8001
+>>>>>>> Stashed changes
 
 # 项目根目录（frontend 的上一级）
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

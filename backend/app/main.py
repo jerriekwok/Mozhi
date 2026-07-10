@@ -1,3 +1,4 @@
+<<<<<<< Updated upstream
 from pathlib import Path
 from uuid import uuid4
 
@@ -7,6 +8,12 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import httpx
 import os
+=======
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.routers import chat as chat_router
+>>>>>>> Stashed changes
 
 app = FastAPI(title="Mozhi API", version="0.1.0")
 
@@ -18,12 +25,14 @@ app.add_middleware(
         "http://localhost:8080",
         "http://127.0.0.1:5173",
         "http://localhost:5173",
+        "null",
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+<<<<<<< Updated upstream
 # Ollama 配置
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
@@ -48,6 +57,8 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     answer: str
 
+=======
+>>>>>>> Stashed changes
 
 class UploadResponse(BaseModel):
     uploadId: str
@@ -120,6 +131,7 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+<<<<<<< Updated upstream
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     """
@@ -221,3 +233,7 @@ async def analyze_calligraphy(request: AnalyzeRequest):
             "每次练习后圈出三个结构最不稳的字单独复写，再与原帖重叠比较重心。",
         ],
     )
+=======
+# 注册 RAG Chat 路由
+app.include_router(chat_router.router)
+>>>>>>> Stashed changes
