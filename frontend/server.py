@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 import atexit
+import time
 
 # 强制覆盖 .js 的 MIME 类型
 mimetypes.add_type('application/javascript', '.js')
@@ -12,6 +13,8 @@ mimetypes.add_type('application/javascript', '.mjs')
 
 FRONTEND_PORT = 8080
 BACKEND_PORT = 8000
+START_BACKEND = os.getenv('MOZHI_START_BACKEND', '1') != '0'
+REQUIRE_BACKEND = os.getenv('MOZHI_REQUIRE_BACKEND', '0') == '1'
 
 # 项目根目录（frontend 的上一级）
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -76,21 +79,38 @@ def start_backend():
     return proc
 
 
+def print_backend_help():
+    print('!!! Backend failed to start.')
+    print('>>> Frontend will still start so you can test the UI without a local model.')
+    print('>>> To install backend dependencies, run from project root:')
+    print('    pip install -r backend/requirements.txt')
+    print('>>> Useful dev switches:')
+    print('    MOZHI_START_BACKEND=0   Start frontend only')
+    print('    MOZHI_REQUIRE_BACKEND=1  Exit when backend fails')
+    print()
+
+
 def main():
-    # 启动后端
-    print(f'>>> Starting backend at http://localhost:{BACKEND_PORT} ...')
-    backend_proc = start_backend()
+    backend_proc = None
 
-    # 等待一小段时间让后端启动
-    import time
-    time.sleep(2)
+    if START_BACKEND:
+        # 启动后端
+        print(f'>>> Starting backend at http://localhost:{BACKEND_PORT} ...')
+        backend_proc = start_backend()
 
-    if backend_proc.poll() is not None:
-        print('!!! Backend failed to start. Check output above.')
-        sys.exit(1)
+        # 等待一小段时间让后端启动
+        time.sleep(2)
 
-    print(f'>>> Backend is running (PID: {backend_proc.pid})')
-    print(f'>>> API docs: http://localhost:{BACKEND_PORT}/docs\n')
+        if backend_proc.poll() is not None:
+            print_backend_help()
+            if REQUIRE_BACKEND:
+                sys.exit(1)
+        else:
+            print(f'>>> Backend is running (PID: {backend_proc.pid})')
+            print(f'>>> API docs: http://localhost:{BACKEND_PORT}/docs\n')
+    else:
+        print('>>> MOZHI_START_BACKEND=0, skipping backend startup.')
+        print('>>> Frontend offline fallback will be used if the API is unavailable.\n')
 
     # 启动前端静态服务器
     os.chdir(os.path.dirname(os.path.abspath(__file__)))

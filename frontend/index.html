@@ -12,119 +12,171 @@
 </head>
 <body>
     <div class="app-shell">
-        <aside class="sidebar" id="sidebar" aria-label="墨智侧边栏">
-            <div class="sidebar__brand">
-                <div class="brand-mark" aria-hidden="true">🖌️</div>
-                <div>
-                    <h1>墨智</h1>
-                    <p>书法学习与创作智能助手</p>
-                </div>
-            </div>
+        <header class="site-header">
+            <a class="brand" href="#home" data-route-link="home" aria-label="返回首页">
+                <span class="brand__mark">墨</span>
+                <span class="brand__text">墨智</span>
+            </a>
 
-            <nav class="sidebar__nav" aria-label="主导航">
-                <button class="nav-item nav-item--active" type="button" data-nav="practice">✒️ 新建练习</button>
-                <button class="nav-item" type="button" data-nav="search">🔍 书法搜索</button>
-                <button class="nav-item" type="button" data-nav="favorites">📌 收藏作品</button>
-                <button class="nav-item" type="button" data-nav="recent">🕰 最近学习</button>
+            <button class="nav-toggle" id="navToggle" type="button" aria-label="打开导航" aria-expanded="false">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+
+            <nav class="site-nav" id="siteNav" aria-label="主导航">
+                <a class="site-nav__link is-active" href="#home" data-route-link="home">首页</a>
+                <a class="site-nav__link" href="#chat" data-route-link="chat">书法问答</a>
+                <a class="site-nav__link" href="#create" data-route-link="create">集字创作</a>
             </nav>
+        </header>
 
-            <div class="sidebar__section">
-                <h2>作品典藏</h2>
-                <ul class="history-list" id="classicWorks"></ul>
-            </div>
-
-            <div class="sidebar__section">
-                <h2>最近练习</h2>
-                <ul class="history-list" id="recentPractices"></ul>
-            </div>
-
-            <div class="user-card">
-                <div class="user-card__avatar" aria-hidden="true">墨</div>
-                <div>
-                    <strong>书墨雅士</strong>
-                    <span>🌿 进阶学习计划</span>
-                </div>
-            </div>
-        </aside>
-
-        <div class="sidebar-scrim" id="sidebarScrim" hidden></div>
-
-        <main class="workspace">
-            <header class="topbar">
-                <button class="icon-button menu-button" id="menuButton" type="button" aria-label="打开侧边栏">☰</button>
-                <button class="model-selector" type="button" aria-label="选择模型">🖌️ 墨韵·书法大师</button>
-                <div class="topbar__actions">
-                    <button class="soft-button" type="button">✨ 专业版</button>
-                    <button class="soft-button" type="button">📜 临时练习</button>
-                </div>
-            </header>
-
-            <section class="chat-panel" aria-label="AI 对话区域">
-                <div class="chat-scroll" id="chatScroll">
-                    <section class="welcome">
-                        <p class="welcome__eyebrow">AI Calligraphy Studio</p>
-                        <h2>欢迎来到墨智</h2>
-                        <p class="welcome__subtitle">以笔传心，以墨修身</p>
-                        <p class="welcome__text">让 AI 陪你学习千年书法。</p>
-                    </section>
-
-                    <section class="analysis-card" aria-label="书法分析案例">
-                        <div class="analysis-card__header">
-                            <span class="seal">鉴</span>
-                            <div>
-                                <h3>《兰亭序》结构分析</h3>
-                                <p>行书 · 王羲之</p>
-                            </div>
+        <main>
+            <section class="page page--home is-active" id="page-home" data-page="home">
+                <section class="hero">
+                    <div class="hero__ink" aria-hidden="true"></div>
+                    <div class="hero__content">
+                        <p class="eyebrow">AI Calligraphy Studio</p>
+                        <h1>墨智</h1>
+                        <p class="hero__subtitle">书法学习与创作智能助手</p>
+                        <p class="hero__text">以新中式水墨界面承载问答、名帖赏析与集字创作，先把体验搭稳，再逐步接入真实创作能力。</p>
+                        <div class="hero__actions">
+                            <a class="button button--primary" href="#chat" data-route-link="chat">开始问答</a>
+                            <a class="button button--ghost" href="#create" data-route-link="create">进入集字</a>
                         </div>
-                        <dl class="analysis-meta">
-                            <div>
-                                <dt>字体</dt>
-                                <dd>行书</dd>
-                            </div>
-                            <div>
-                                <dt>作者</dt>
-                                <dd>王羲之</dd>
-                            </div>
-                        </dl>
-                        <blockquote>
-                            此字横画舒展，转折自然，体现魏晋书风的洒脱与灵动。
-                        </blockquote>
-                    </section>
+                    </div>
+                </section>
 
-                    <section class="feature-reserve" aria-label="作品分析预留区域">
+                <section class="home-section">
+                    <div class="section-heading">
+                        <p class="eyebrow">Core Tools</p>
+                        <h2>三页核心工作台</h2>
+                    </div>
+                    <div class="feature-grid">
+                        <a class="feature-card" href="#chat" data-route-link="chat">
+                            <span class="feature-card__icon">问</span>
+                            <h3>书法问答</h3>
+                            <p>连接当前后端 `/chat`，用于书体、技法、名家、临帖方法等书法问题。</p>
+                            <span>进入问答</span>
+                        </a>
+                        <a class="feature-card" href="#create" data-route-link="create">
+                            <span class="feature-card__icon feature-card__icon--gold">集</span>
+                            <h3>集字创作</h3>
+                            <p>先完成选帖、选风格、输入文字与空预览界面，后续由创作后端接入。</p>
+                            <span>进入创作</span>
+                        </a>
+                    </div>
+                </section>
+
+                <section class="home-section home-section--paper">
+                    <div class="section-heading">
+                        <p class="eyebrow">Copybook</p>
+                        <h2>名帖赏析</h2>
+                    </div>
+                    <div class="copybook-rail" id="homeCopybooks" aria-label="名帖赏析列表"></div>
+                </section>
+            </section>
+
+            <section class="page page--chat" id="page-chat" data-page="chat">
+                <aside class="chat-history" aria-label="对话历史">
+                    <div class="panel-title">
+                        <span class="seal seal--small">问</span>
                         <div>
-                            <h3>作品智能分析</h3>
-                            <p>预留图片上传、AI 评分、笔画分析、OCR 与 Agent 调用能力。</p>
+                            <h2>对话历史</h2>
+                            <p>本地界面记录</p>
                         </div>
-                        <div class="score-preview" aria-label="AI评分预览">
-                            <span>AI 评分</span>
-                            <strong>92</strong>
+                    </div>
+                    <button class="button button--primary button--block" id="newChatButton" type="button">新对话</button>
+                    <div class="history-list" id="conversationList"></div>
+                </aside>
+
+                <section class="chat-workspace" aria-label="书法问答">
+                    <div class="chat-scroll" id="chatScroll">
+                        <div class="chat-welcome" id="chatWelcome">
+                            <span class="seal">墨</span>
+                            <h2>欢迎来到书法问答</h2>
+                            <p>可以请教楷书入门、碑帖赏析、笔法结构、文房工具等问题。</p>
+                            <div class="quick-chips" id="quickChips"></div>
                         </div>
-                    </section>
-
-                    <div class="message-list" id="messageList" aria-live="polite"></div>
-                </div>
-
-                <div class="composer-wrap">
-                    <div class="quick-chips" id="quickChips" aria-label="快捷功能">
-                        <button type="button" data-prompt="请分析我的书法作品，并从章法、结构、用笔三方面给出建议。">分析我的书法作品</button>
-                        <button type="button" data-prompt="请为我制定一份楷书入门学习路径，包含笔画、结构和临帖安排。">指导楷书入门</button>
-                        <button type="button" data-prompt="请根据我的水平生成一份七天临帖计划。">生成临帖计划</button>
-                        <button type="button" data-prompt="请评价我的字，指出最需要改进的三个问题。">评价我的字</button>
+                        <div class="message-list" id="messageList" aria-live="polite"></div>
                     </div>
 
                     <form class="composer" id="composer">
-                        <textarea id="messageInput" rows="1" placeholder="上传作品或输入你的书法问题……" aria-label="输入书法问题"></textarea>
-                        <div class="composer__actions">
-                            <button class="tool-button" id="uploadButton" type="button">📎 上传作品</button>
-                            <button class="tool-button" id="imageAnalyzeButton" type="button">🖼️ 图片分析</button>
-                            <button class="tool-button" id="voiceButton" type="button">🎙️ 语音输入</button>
-                            <button class="send-button" type="submit" aria-label="发送">➤</button>
+                        <input id="imageUploadInput" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+                        <textarea id="messageInput" rows="1" placeholder="向墨智请教书法问题..." aria-label="输入书法问题"></textarea>
+                        <div class="composer-preview" id="composerPreview" hidden></div>
+                        <div class="composer-actions">
+                            <button class="composer-tool-button" id="imageUploadButton" type="button" aria-label="上传书法图片">图片</button>
+                            <button class="send-button" id="sendButton" type="submit">发送</button>
                         </div>
                     </form>
-                </div>
+                </section>
+
+                <aside class="topic-panel" aria-label="热门话题">
+                    <div class="panel-title">
+                        <span class="seal seal--small">题</span>
+                        <div>
+                            <h2>热门话题</h2>
+                            <p>点击填入输入框</p>
+                        </div>
+                    </div>
+                    <div class="topic-tags" id="topicTags"></div>
+                </aside>
+            </section>
+
+            <section class="page page--create" id="page-create" data-page="create">
+                <aside class="create-sidebar" aria-label="集字创作设置">
+                    <section class="create-panel">
+                        <div class="panel-title">
+                            <span class="seal seal--small">帖</span>
+                            <div>
+                                <h2>字帖选字</h2>
+                                <p>素材图片待后端接入</p>
+                            </div>
+                        </div>
+                        <div class="style-tabs" id="copybookTabs"></div>
+                        <div class="copybook-list" id="copybookList"></div>
+                        <div class="character-grid" id="characterGrid" aria-label="字帖字符"></div>
+                    </section>
+
+                    <section class="create-panel">
+                        <div class="panel-title">
+                            <span class="seal seal--small">风</span>
+                            <div>
+                                <h2>书法风格</h2>
+                                <p>用于后续生成参数</p>
+                            </div>
+                        </div>
+                        <div class="style-list" id="styleList"></div>
+                    </section>
+                </aside>
+
+                <section class="create-workspace" aria-label="集字创作画布">
+                    <div class="create-toolbar">
+                        <input id="createTextInput" type="text" placeholder="输入创作文字..." aria-label="输入创作文字">
+                        <button class="button button--primary" id="generateButton" type="button">生成预留</button>
+                        <button class="button button--ink" id="saveArtworkButton" type="button" disabled>保存</button>
+                    </div>
+
+                    <div class="artboard-wrap">
+                        <div class="artboard" id="artboard">
+                            <div class="empty-art">
+                                <span class="seal">集</span>
+                                <h2>集字创作预览区</h2>
+                                <p>当前只做界面和接口预留，不生成假图片。后续接入素材库或生成服务后，这里显示真实作品。</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="create-status" id="createStatus">当前风格：未选择 · 当前字帖：未选择</div>
+                </section>
             </section>
         </main>
+    </div>
+
+    <div class="image-viewer" id="imageViewer" aria-modal="true" role="dialog" hidden>
+        <button class="image-viewer__close" id="imageViewerClose" type="button" aria-label="关闭图片预览">×</button>
+        <img id="imageViewerImg" alt="">
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
