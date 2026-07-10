@@ -4,6 +4,6 @@ uvicorn[standard]
 python-dotenv
 requests
 httpx
+python-multipart
 pytest
 ruff
-
