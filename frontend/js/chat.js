@@ -1,8 +1,11 @@
 import { chatWithAI } from "./api.js";
 
-function createMessage(role, text) {
+function createMessage(role, text, id = null) {
     const message = document.createElement("article");
     message.className = `message message--${role}`;
+    if (id) {
+        message.id = id;
+    }
 
     const bubble = document.createElement("div");
     bubble.className = "message__bubble";
@@ -23,10 +26,6 @@ function showToast(text) {
     }, 2600);
 }
 
-function buildLocalReply(message) {
-    return `已收到你的问题：“${message}”\n\n墨智建议先观察整体章法，再看单字结构，最后拆解起笔、行笔与收笔。后续接入 AI Agent 后，这里会返回更完整的作品分析。`;
-}
-
 export function initChat(composerController) {
     const form = document.querySelector("#composer");
     const messageList = document.querySelector("#messageList");
@@ -34,10 +33,22 @@ export function initChat(composerController) {
     const uploadButton = document.querySelector("#uploadButton");
     const imageAnalyzeButton = document.querySelector("#imageAnalyzeButton");
     const voiceButton = document.querySelector("#voiceButton");
+    const sendButton = document.querySelector(".send-button");
 
-    const appendMessage = (role, text) => {
-        messageList.appendChild(createMessage(role, text));
+    const appendMessage = (role, text, id = null) => {
+        messageList.appendChild(createMessage(role, text, id));
         chatScroll.scrollTo({ top: chatScroll.scrollHeight, behavior: "smooth" });
+    };
+
+    const removeMessage = (id) => {
+        const el = document.getElementById(id);
+        if (el) el.remove();
+    };
+
+    const setLoading = (loading) => {
+        sendButton.disabled = loading;
+        sendButton.style.opacity = loading ? "0.5" : "1";
+        sendButton.style.cursor = loading ? "not-allowed" : "pointer";
     };
 
     form.addEventListener("submit", async (event) => {
@@ -49,15 +60,24 @@ export function initChat(composerController) {
             return;
         }
 
+        // 显示用户消息
         appendMessage("user", message);
         composerController.reset();
-        showToast("墨智正在分析你的书法作品……");
+        setLoading(true);
+
+        // 显示 loading 指示器
+        const loadingId = "loading-" + Date.now();
+        appendMessage("assistant-loading", "墨智正在思考中……", loadingId);
 
         try {
             const data = await chatWithAI(message);
-            appendMessage("assistant", data.answer || buildLocalReply(message));
+            removeMessage(loadingId);
+            appendMessage("assistant", data.answer);
         } catch (error) {
-            appendMessage("assistant", buildLocalReply(message));
+            removeMessage(loadingId);
+            showToast(error.message || "连接失败，请检查网络或后端服务");
+        } finally {
+            setLoading(false);
         }
     });
 

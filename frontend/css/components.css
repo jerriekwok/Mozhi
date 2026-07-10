@@ -352,6 +352,13 @@
     background: rgba(255, 252, 246, 0.82);
 }
 
+.message--assistant-loading .message__bubble {
+    border: 1px dashed rgba(91, 60, 43, 0.18);
+    background: rgba(255, 252, 246, 0.55);
+    color: var(--color-muted);
+    font-style: italic;
+}
+
 .quick-chips {
     display: flex;
     gap: 8px;
