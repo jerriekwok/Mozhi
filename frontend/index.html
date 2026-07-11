@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="墨智 - 中国书法学习与创作智能助手">
+    <title>墨智 - 书法学习与创作智能助手</title>
+    <link rel="stylesheet" href="./css/reset.css">
+    <link rel="stylesheet" href="./css/variables.css">
+    <link rel="stylesheet" href="./css/layout.css">
+    <link rel="stylesheet" href="./css/components.css">
+</head>
+<body>
+    <div class="app-shell">
+        <header class="site-header">
+            <a class="brand" href="#home" data-route-link="home" aria-label="返回首页">
+                <span class="brand__mark">墨</span>
+                <span class="brand__text">墨智</span>
+            </a>
+
+            <button class="nav-toggle" id="navToggle" type="button" aria-label="打开导航" aria-expanded="false">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+
+            <nav class="site-nav" id="siteNav" aria-label="主导航">
+                <a class="site-nav__link is-active" href="#home" data-route-link="home">首页</a>
+                <a class="site-nav__link" href="#chat" data-route-link="chat">书法问答</a>
+                <a class="site-nav__link" href="#create" data-route-link="create">集字创作</a>
+                <a class="site-nav__link" href="#learn" data-route-link="learn">学习推荐</a>
+                <a class="site-nav__link" href="#gallery" data-route-link="gallery">文化展馆</a>
+            </nav>
+        </header>
+
+        <main>
+            <section class="page page--home is-active" id="page-home" data-page="home">
+                <section class="hero">
+                    <div class="hero__ink" aria-hidden="true"></div>
+                    <div class="hero__content">
+                        <p class="eyebrow">AI Calligraphy Studio</p>
+                        <h1>墨智</h1>
+                        <p class="hero__subtitle">书法学习与创作智能助手</p>
+                        <p class="hero__text">以新中式水墨界面承载问答、名帖赏析与集字创作，先把体验搭稳，再逐步接入真实创作能力。</p>
+                        <div class="hero__actions">
+                            <a class="button button--primary" href="#chat" data-route-link="chat">开始问答</a>
+                            <a class="button button--ghost" href="#create" data-route-link="create">进入集字</a>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="home-section">
+                    <div class="section-heading">
+                        <p class="eyebrow">Core Tools</p>
+                        <h2>三页核心工作台</h2>
+                    </div>
+                    <div class="feature-grid">
+                        <a class="feature-card" href="#chat" data-route-link="chat">
+                            <span class="feature-card__icon">问</span>
+                            <h3>书法问答</h3>
+                            <p>连接当前后端 `/chat`，用于书体、技法、名家、临帖方法等书法问题。</p>
+                            <span>进入问答</span>
+                        </a>
+                        <a class="feature-card" href="#create" data-route-link="create">
+                            <span class="feature-card__icon feature-card__icon--gold">集</span>
+                            <h3>集字创作</h3>
+                            <p>先完成选帖、选风格、输入文字与空预览界面，后续由创作后端接入。</p>
+                            <span>进入创作</span>
+                        </a>
+                    </div>
+                </section>
+
+                <section class="home-section home-section--paper">
+                    <div class="section-heading">
+                        <p class="eyebrow">Copybook</p>
+                        <h2>名帖赏析</h2>
+                    </div>
+                    <div class="copybook-rail" id="homeCopybooks" aria-label="名帖赏析列表"></div>
+                </section>
+            </section>
+
+            <section class="page page--chat" id="page-chat" data-page="chat">
+                <aside class="chat-history" aria-label="对话历史">
+                    <div class="panel-title">
+                        <span class="seal seal--small">问</span>
+                        <div>
+                            <h2>对话历史</h2>
+                            <p>本地界面记录</p>
+                        </div>
+                    </div>
+                    <button class="button button--primary button--block" id="newChatButton" type="button">新对话</button>
+                    <div class="history-list" id="conversationList"></div>
+                </aside>
+
+                <section class="chat-workspace" aria-label="书法问答">
+                    <div class="chat-scroll" id="chatScroll">
+                        <div class="chat-welcome" id="chatWelcome">
+                            <span class="seal">墨</span>
+                            <h2>欢迎来到书法问答</h2>
+                            <p>可以请教楷书入门、碑帖赏析、笔法结构、文房工具等问题。</p>
+                            <div class="quick-chips" id="quickChips"></div>
+                        </div>
+                        <div class="message-list" id="messageList" aria-live="polite"></div>
+                    </div>
+
+                    <form class="composer" id="composer">
+                        <input id="imageUploadInput" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+                        <textarea id="messageInput" rows="1" placeholder="向墨智请教书法问题..." aria-label="输入书法问题"></textarea>
+                        <div class="composer-preview" id="composerPreview" hidden></div>
+                        <div class="composer-actions">
+                            <button class="composer-tool-button" id="imageUploadButton" type="button" aria-label="上传书法图片">图片</button>
+                            <button class="send-button" id="sendButton" type="submit">发送</button>
+                        </div>
+                    </form>
+                </section>
+
+                <aside class="topic-panel" aria-label="热门话题">
+                    <div class="panel-title">
+                        <span class="seal seal--small">题</span>
+                        <div>
+                            <h2>热门话题</h2>
+                            <p>点击填入输入框</p>
+                        </div>
+                    </div>
+                    <div class="topic-tags" id="topicTags"></div>
+                </aside>
+            </section>
+
+            <section class="page page--learn" id="page-learn" data-page="learn">
+                <div class="learning-page">
+                    <section class="learning-hero">
+                        <p class="eyebrow">Learning Path</p>
+                        <h1>书法学习推荐</h1>
+                        <p>根据你的基础、目标书体与练习时间，生成一份可执行的学习顺序。</p>
+                    </section>
+
+                    <div class="learning-grid">
+                        <form class="learning-form" id="learningPlanForm">
+                            <label>
+                                当前水平
+                                <select id="learningLevel" name="level">
+                                    <option value="beginner">零基础 / 初学</option>
+                                    <option value="intermediate">有一定基础</option>
+                                    <option value="advanced">进阶提升</option>
+                                </select>
+                            </label>
+                            <label>
+                                想学习的书体
+                                <select id="learningStyle" name="style">
+                                    <option value="kaishu">楷书</option>
+                                    <option value="xingshu">行书</option>
+                                    <option value="caoshu">草书</option>
+                                    <option value="lishu">隶书</option>
+                                    <option value="zhuanshu">篆书</option>
+                                </select>
+                            </label>
+                            <label>
+                                每日练习时间（分钟）
+                                <input id="learningMinutes" name="daily_minutes" type="number" min="10" max="180" value="30">
+                            </label>
+                            <label>
+                                学习目标（可选）
+                                <textarea id="learningGoal" name="goal" rows="3" placeholder="例如：想临好颜体，提升结构和用笔稳定性"></textarea>
+                            </label>
+                            <button class="button button--primary" id="learningPlanSubmit" type="submit">生成学习路径</button>
+                        </form>
+
+                        <section class="learning-result" id="learningPlanResult" hidden aria-live="polite">
+                            <p class="eyebrow">Your Plan</p>
+                            <h2>为你推荐的学习路径</h2>
+                            <div class="learning-plan-text" id="learningPlanText"></div>
+                            <div class="learning-sources" id="learningPlanSources"></div>
+                        </section>
+                    </div>
+                </div>
+            </section>
+
+            <section class="page page--gallery" id="page-gallery" data-page="gallery">
+                <div class="gallery-page">
+                    <section class="gallery-heading">
+                        <p class="eyebrow">Four Treasures Studio</p>
+                        <h1>文房四宝展馆</h1>
+                        <p>拖动场景可环视文房案；点击器物或下方卡片，了解笔、墨、纸、砚与书写的关系。</p>
+                    </section>
+
+                    <section class="gallery-stage" aria-label="文房四宝三维展馆">
+                        <canvas id="galleryCanvas" aria-label="可交互的文房四宝三维场景"></canvas>
+                        <p class="gallery-hint">拖动旋转 · 滚轮缩放 · 点击器物查看介绍</p>
+                    </section>
+
+                    <section class="gallery-info-panel" aria-live="polite">
+                        <div class="gallery-artifact-list" id="galleryArtifactList"></div>
+                        <article class="gallery-artifact-detail">
+                            <p class="eyebrow">Selected Artifact</p>
+                            <h2 id="galleryArtifactTitle">湖笔</h2>
+                            <p class="gallery-artifact-summary" id="galleryArtifactSummary"></p>
+                            <p id="galleryArtifactDetail"></p>
+                        </article>
+                    </section>
+                </div>
+            </section>
+
+            <section class="page page--create" id="page-create" data-page="create">
+                <aside class="create-sidebar" aria-label="集字创作设置">
+                    <section class="create-panel">
+                        <div class="panel-title">
+                            <span class="seal seal--small">帖</span>
+                            <div>
+                                <h2>字帖选字</h2>
+                                <p>素材图片待后端接入</p>
+                            </div>
+                        </div>
+                        <div class="style-tabs" id="copybookTabs"></div>
+                        <div class="copybook-list" id="copybookList"></div>
+                        <div class="character-grid" id="characterGrid" aria-label="字帖字符"></div>
+                    </section>
+
+                    <section class="create-panel">
+                        <div class="panel-title">
+                            <span class="seal seal--small">风</span>
+                            <div>
+                                <h2>书法风格</h2>
+                                <p>用于后续生成参数</p>
+                            </div>
+                        </div>
+                        <div class="style-list" id="styleList"></div>
+                    </section>
+                </aside>
+
+                <section class="create-workspace" aria-label="集字创作画布">
+                    <div class="create-toolbar">
+                        <input id="createTextInput" type="text" placeholder="输入创作文字..." aria-label="输入创作文字">
+                        <button class="button button--primary" id="generateButton" type="button">生成预留</button>
+                        <button class="button button--ink" id="saveArtworkButton" type="button" disabled>保存</button>
+                    </div>
+
+                    <div class="artboard-wrap">
+                        <div class="artboard" id="artboard">
+                            <div class="empty-art">
+                                <span class="seal">集</span>
+                                <h2>集字创作预览区</h2>
+                                <p>当前只做界面和接口预留，不生成假图片。后续接入素材库或生成服务后，这里显示真实作品。</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="create-status" id="createStatus">当前风格：未选择 · 当前字帖：未选择</div>
+                </section>
+            </section>
+        </main>
+    </div>
+
+    <div class="image-viewer" id="imageViewer" aria-modal="true" role="dialog" hidden>
+        <button class="image-viewer__close" id="imageViewerClose" type="button" aria-label="关闭图片预览">×</button>
+        <img id="imageViewerImg" alt="">
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+    <script type="module" src="./js/main.js"></script>
+</body>
+</html>

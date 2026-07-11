@@ -1,0 +1,22 @@
+:root {
+    --color-ink: #1f1b16;
+    --color-ink-soft: #4c4136;
+    --color-muted: #7a6a5a;
+    --color-paper: #f7f0e4;
+    --color-rice: #fbf7ef;
+    --color-paper-deep: #eadbc6;
+    --color-cinnabar: #a33b2e;
+    --color-cinnabar-dark: #7d2b23;
+    --color-gold: #a8763e;
+    --color-bamboo: #4f7358;
+    --color-line: rgba(48, 37, 27, 0.14);
+    --color-panel: rgba(255, 252, 246, 0.84);
+    --shadow-soft: 0 18px 54px rgba(57, 42, 29, 0.12);
+    --shadow-card: 0 12px 30px rgba(57, 42, 29, 0.1);
+    --radius-lg: 18px;
+    --radius-md: 12px;
+    --radius-sm: 8px;
+    --header-height: 64px;
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    --font-calligraphy: KaiTi, "STKaiti", FangSong, SimSun, Georgia, serif;
+}

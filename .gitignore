@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[codz]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
+env/
+venv/
+
+# Environment variables
+.env
+
+# Runtime data generated locally
+data/chroma_db/
+backend/data/chroma_db/
+data/knowledge_base/*.skill
+uploads/*
+!uploads/.gitkeep
+
+# Local model files can be large and must not be committed
+models/*
+!models/README.md
+!models/.gitkeep
+
+# Temporary files and local logs
+.tmp_*/
+.tmp_*
+*.log
+
+# Operating-system files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Testing
+.pytest_cache/
+.coverage
+
+# Ruff
+.ruff_cache/
