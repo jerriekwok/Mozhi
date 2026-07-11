@@ -8,12 +8,12 @@
 - 学习路径推荐：按基础、目标书体、每日练习时间和目标生成建议。
 - 文房四宝展馆：基于 Three.js 的湖笔、徽墨、宣纸、端砚交互展示。
 - 集字创作界面：已完成字帖、书体与创作画布交互；真实单字素材库与作品导出仍在开发。
-- 书法图片分析：保留了上传与接口基础，尚未接入正式视觉评分模型。
+- 书法图片分析：上传作品后由本地视觉模型分析章法、结构和用笔，并给出练习建议。
 
 ## 技术栈
 
 - 后端：Python、FastAPI、LangChain、Chroma
-- 本地模型：Ollama（默认 `qwen3:8b`、`bge-m3`）
+- 本地模型：Ollama（默认 `qwen2.5vl:7b`、`bge-m3`）
 - 前端：原生 HTML / CSS / JavaScript
 - 三维展示：Three.js（本地静态资源，不依赖 CDN）
 
@@ -30,7 +30,7 @@ python -m venv .venv
 3. 下载所需的本地模型：
 
 ```powershell
-ollama pull qwen3:8b
+ollama pull qwen2.5vl:7b
 ollama pull bge-m3
 ```
 
@@ -42,7 +42,7 @@ ollama pull bge-m3
 
 ## 启动项目
 
-直接双击根目录的 `start_mozhi.bat`。它会分别打开两个窗口：
+直接双击根目录的 `start_mozhi.bat`。它会打开前端和后端两个窗口：
 
 - 前端：`http://127.0.0.1:8080`
 - 后端 API 文档：`http://127.0.0.1:8000/docs`
@@ -67,7 +67,7 @@ cd backend
 ## 数据与提交说明
 
 - 应提交：`data/knowledge/`、`data/knowledge_base/` 中的 Markdown 知识资料。
-- 不提交：`data/chroma_db/` 向量索引、`uploads/` 用户上传内容、`models/` 中的大模型权重、`.venv/` 和临时日志。
+- 不提交：`data/chroma_db/` 向量索引、`data/mozhi.sqlite3` 本机聊天记录、`uploads/` 用户上传内容、`models/` 中的大模型权重、`.venv/` 和临时日志。
 - 克隆项目后，按“首次安装”的第 4 步重新构建向量索引即可。
 
 ## 测试

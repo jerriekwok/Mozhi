@@ -1,8 +1,11 @@
 import {
-    analyzeCalligraphy,
+    analyzeCalligraphyStream,
     chatWithAIStream,
+    deleteChatSession,
     generateCalligraphy,
     generateLearningPlan,
+    getChatSession,
+    getChatSessions,
     getCalligraphyStyles,
     getCopybooks,
     saveArtwork,
@@ -35,6 +38,67 @@ function $all(selector) {
 
 function createId() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2);
+}
+
+function normalizeSavedMessage(message) {
+    return {
+        id: String(message.id),
+        role: message.role === "human" ? "user" : "assistant",
+        content: message.content || "",
+        image: null,
+        sources: Array.isArray(message.sources) ? message.sources : [],
+        timestamp: message.created_at || Date.now()
+    };
+}
+
+function applySavedConversation(savedConversation) {
+    const conversation = {
+        id: savedConversation.id,
+        title: savedConversation.title || "新对话",
+        messages: (savedConversation.messages || []).map(normalizeSavedMessage),
+        updatedAt: savedConversation.updated_at || Date.now(),
+        persisted: true
+    };
+    const index = state.conversations.findIndex((item) => item.id === conversation.id);
+    if (index === -1) {
+        state.conversations.unshift(conversation);
+    } else {
+        state.conversations[index] = conversation;
+    }
+    state.currentConversationId = conversation.id;
+}
+
+async function openSavedConversation(conversationId) {
+    const savedConversation = await getChatSession(conversationId);
+    applySavedConversation(savedConversation);
+    renderConversationList();
+    renderMessages();
+}
+
+async function loadSavedConversations() {
+    try {
+        const savedConversations = await getChatSessions();
+        state.conversations = savedConversations.map((conversation) => ({
+            id: conversation.id,
+            title: conversation.title || "新对话",
+            messages: [],
+            updatedAt: conversation.updated_at || Date.now(),
+            persisted: true
+        }));
+
+        if (state.conversations.length > 0) {
+            await openSavedConversation(state.conversations[0].id);
+            return;
+        }
+    } catch (error) {
+        // The chat remains usable in the frontend's temporary mode if the
+        // backend has not started yet.
+        console.warn("Saved conversations could not be loaded:", error);
+    }
+
+    ensureConversation();
+    renderConversationList();
+    renderMessages();
 }
 
 function showToast(text) {
@@ -123,7 +187,8 @@ function ensureConversation() {
         id,
         title: "新对话",
         messages: [],
-        updatedAt: Date.now()
+        updatedAt: Date.now(),
+        persisted: false
     });
     state.currentConversationId = id;
     renderConversationList();
@@ -145,10 +210,13 @@ function renderConversationList() {
     const list = $("#conversationList");
     list.innerHTML = state.conversations
         .map((conversation) => `
-            <button class="conversation-item ${conversation.id === state.currentConversationId ? "is-active" : ""}" type="button" data-conversation-id="${conversation.id}">
-                <span>${conversation.title}</span>
-                <small>${formatTime(conversation.updatedAt)}</small>
-            </button>
+            <div class="conversation-row">
+                <button class="conversation-item ${conversation.id === state.currentConversationId ? "is-active" : ""}" type="button" data-conversation-id="${conversation.id}">
+                    <span>${conversation.title}</span>
+                    <small>${formatTime(conversation.updatedAt)}</small>
+                </button>
+                <button class="conversation-delete" type="button" data-delete-conversation-id="${conversation.id}" aria-label="删除对话：${conversation.title}" title="删除对话">×</button>
+            </div>
         `)
         .join("");
 }
@@ -268,13 +336,13 @@ function addMessage(role, content, image = null, sources = []) {
     return conversationId;
 }
 
-function addStreamingAssistantMessage() {
+function addStreamingAssistantMessage(placeholder = "正在检索资料…") {
     ensureConversation();
     const conversation = getCurrentConversation();
     const message = {
         id: createId(),
         role: "assistant",
-        content: "正在检索资料…",
+        content: placeholder,
         image: null,
         sources: [],
         pending: true,
@@ -286,16 +354,6 @@ function addStreamingAssistantMessage() {
     renderConversationList();
     renderMessages("auto");
     return message;
-}
-
-function formatAnalysisAnswer(data) {
-    const suggestions = Array.isArray(data.suggestions) && data.suggestions.length > 0
-        ? `\n\n练习建议：\n${data.suggestions.map((item, index) => `${index + 1}. ${item}`).join("\n")}`
-        : "";
-    const analysis = data.analysis
-        ? `\n\n具体分析：\n章法：${data.analysis.composition}\n结构：${data.analysis.structure}\n用笔：${data.analysis.strokes}`
-        : "";
-    return `图片分析结果（${data.style || "书法"} · ${data.score ?? "-"}分）\n\n${data.summary || "已完成图片分析。"}${analysis}${suggestions}`;
 }
 
 function createOfflineImageAnswer(question) {
@@ -390,10 +448,10 @@ function closeImageViewer() {
     img.alt = "";
 }
 
-function initChat() {
-    ensureConversation();
+async function initChat() {
     renderConversationList();
     renderMessages();
+    await loadSavedConversations();
 
     $("#quickChips").innerHTML = quickQuestions
         .map((question) => `<button type="button" data-question="${question}">${question}</button>`)
@@ -410,12 +468,53 @@ function initChat() {
         renderMessages();
     });
 
-    $("#conversationList").addEventListener("click", (event) => {
+    $("#conversationList").addEventListener("click", async (event) => {
+        const deleteButton = event.target.closest("[data-delete-conversation-id]");
+        if (deleteButton) {
+            const conversationId = deleteButton.dataset.deleteConversationId;
+            const conversation = state.conversations.find((item) => item.id === conversationId);
+            if (!conversation) return;
+
+            const confirmed = window.confirm(`确定删除“${conversation.title}”吗？删除后无法恢复。`);
+            if (!confirmed) return;
+
+            try {
+                if (conversation.persisted) {
+                    await deleteChatSession(conversationId);
+                }
+
+                const wasCurrent = state.currentConversationId === conversationId;
+                state.conversations = state.conversations.filter((item) => item.id !== conversationId);
+                if (wasCurrent) {
+                    state.currentConversationId = null;
+                    if (state.conversations.length > 0) {
+                        const nextConversation = state.conversations[0];
+                        if (nextConversation.persisted) {
+                            await openSavedConversation(nextConversation.id);
+                        } else {
+                            state.currentConversationId = nextConversation.id;
+                        }
+                    } else {
+                        ensureConversation();
+                    }
+                }
+                renderConversationList();
+                renderMessages();
+                showToast("对话已删除。");
+            } catch (error) {
+                showToast("删除失败，请检查后端服务后重试。");
+            }
+            return;
+        }
+
         const item = event.target.closest("[data-conversation-id]");
         if (!item) return;
-        state.currentConversationId = item.dataset.conversationId;
-        renderConversationList();
-        renderMessages();
+        if (item.dataset.conversationId === state.currentConversationId) return;
+        try {
+            await openSavedConversation(item.dataset.conversationId);
+        } catch (error) {
+            showToast("历史对话加载失败，请检查后端服务。");
+        }
     });
 
     document.body.addEventListener("click", (event) => {
@@ -488,18 +587,40 @@ function initChat() {
                 resizeComposer();
                 addMessage("user", message, image);
                 clearPendingImage({ keepObjectUrl: true });
+                const assistantMessage = addStreamingAssistantMessage("正在分析图片…");
 
                 try {
                     const uploadData = await uploadCalligraphyImage(pendingImage.file);
-                    const data = await analyzeCalligraphy({
+                    const data = await analyzeCalligraphyStream({
                         uploadId: uploadData.uploadId,
                         imageUrl: uploadData.imageUrl,
                         question
+                    }, {
+                        onChunk(chunk) {
+                            if (assistantMessage.pending) {
+                                assistantMessage.content = "";
+                                assistantMessage.pending = false;
+                            }
+                            assistantMessage.content += chunk;
+                            renderMessages("auto");
+                        }
                     });
-                    addMessage("assistant", formatAnalysisAnswer(data));
+
+                    if (assistantMessage.pending) {
+                        assistantMessage.content = data.answer || "图片分析完成，但没有返回具体内容。";
+                        assistantMessage.pending = false;
+                    }
+                    renderMessages("auto");
                 } catch (error) {
-                    addMessage("assistant", createOfflineImageAnswer(question));
-                    showToast("后端未连接，已使用前端离线测试回复。");
+                    assistantMessage.pending = false;
+                    if (error instanceof TypeError) {
+                        assistantMessage.content = createOfflineImageAnswer(question);
+                        showToast("后端未连接，已使用前端离线测试回复。");
+                    } else {
+                        assistantMessage.content = `图片分析失败：${error.message || "请稍后重试。"}`;
+                        showToast(error.message || "图片分析失败，请稍后重试。");
+                    }
+                    renderMessages("auto");
                 }
             } else {
                 input.value = "";
@@ -528,6 +649,9 @@ function initChat() {
                         assistantMessage.pending = false;
                     }
                     assistantMessage.sources = data.sources || assistantMessage.sources;
+                    if (!data.offline) {
+                        getCurrentConversation().persisted = true;
+                    }
                     renderMessages("auto");
                 } catch (streamError) {
                     if (assistantMessage.pending) {
@@ -714,9 +838,9 @@ function initCreate() {
     });
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
     renderHomeCopybooks();
-    initChat();
+    await initChat();
     initLearning();
     initCreate();
     galleryController = initGallery();

@@ -5,8 +5,6 @@ from typing import List
 
 from langchain_core.embeddings import Embeddings
 
-from app.core.config import settings
-
 logger = logging.getLogger(__name__)
 
 

@@ -12,6 +12,7 @@ if str(BACKEND_DIR) not in sys.path:
 
 import app.main as main  # noqa: E402
 from app.routers import chat as chat_router  # noqa: E402
+from app.services.vision_analysis import VisionAnalysisError  # noqa: E402
 
 
 def test_health_endpoint() -> None:
@@ -40,6 +41,7 @@ def test_rag_chat_endpoint_remains_available(monkeypatch) -> None:
         "invoke_rag",
         lambda question, session_id=None: {"answer": question, "sources": []},
     )
+    monkeypatch.setattr(chat_router, "add_message", lambda session_id, *args, **kwargs: session_id)
 
     response = TestClient(main.app).post(
         "/api/chat",
@@ -73,6 +75,7 @@ def test_rag_chat_returns_deduplicated_sources(monkeypatch) -> None:
             ],
         },
     )
+    monkeypatch.setattr(chat_router, "add_message", lambda session_id, *args, **kwargs: session_id)
 
     response = TestClient(main.app).post(
         "/api/chat",
@@ -118,6 +121,7 @@ def test_rag_stream_emits_sources_chunks_and_completion(monkeypatch) -> None:
             )
         ),
     )
+    monkeypatch.setattr(chat_router, "add_message", lambda session_id, *args, **kwargs: session_id)
 
     response = TestClient(main.app).post(
         "/api/chat/stream",
@@ -128,4 +132,81 @@ def test_rag_stream_emits_sources_chunks_and_completion(monkeypatch) -> None:
     assert "event: sources" in response.text
     assert '"content": "First "' in response.text
     assert '"content": "answer."' in response.text
+    assert "event: done" in response.text
+
+
+def test_calligraphy_analysis_uses_local_vision_model(tmp_path, monkeypatch) -> None:
+    upload_id = "calligraphy_0123456789abcdef"
+    image_path = tmp_path / f"{upload_id}.jpg"
+    image_path.write_bytes(b"not-used-by-the-mock")
+    monkeypatch.setattr(main, "UPLOAD_ROOT", tmp_path)
+    monkeypatch.setattr(
+        main,
+        "analyze_calligraphy_image",
+        lambda path, question, style: {
+            "score": 72,
+            "style": "楷书",
+            "summary": "整体能看出楷书的基本结构，但横画收笔不够稳定。",
+            "analysis": {
+                "composition": "行距略紧。",
+                "structure": "部分字中宫偏紧。",
+                "strokes": "横画收笔需要更明确。",
+            },
+            "suggestions": ["先单独练横画收笔。"],
+        },
+    )
+
+    response = TestClient(main.app).post(
+        "/calligraphy/analyze",
+        json={"uploadId": upload_id, "question": "重点看横画", "style": "kaishu"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["score"] == 72
+    assert response.json()["analysis"]["strokes"] == "横画收笔需要更明确。"
+
+
+def test_calligraphy_upload_endpoint_is_not_shadowed_by_static_files(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(main, "UPLOAD_ROOT", tmp_path)
+    response = TestClient(main.app).post(
+        "/uploads/calligraphy",
+        data={"purpose": "analysis"},
+        files={"file": ("practice.png", b"image-data", "image/png")},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["uploadId"].startswith("calligraphy_")
+
+
+def test_calligraphy_analysis_reports_unavailable_vision_model(tmp_path, monkeypatch) -> None:
+    upload_id = "calligraphy_0123456789abcdef"
+    (tmp_path / f"{upload_id}.png").write_bytes(b"not-used-by-the-mock")
+    monkeypatch.setattr(main, "UPLOAD_ROOT", tmp_path)
+
+    def fail(*args, **kwargs):
+        raise VisionAnalysisError("Vision model is unavailable")
+
+    monkeypatch.setattr(main, "analyze_calligraphy_image", fail)
+
+    response = TestClient(main.app).post("/calligraphy/analyze", json={"uploadId": upload_id})
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Vision model is unavailable"
+
+
+def test_calligraphy_analysis_can_stream_model_output(tmp_path, monkeypatch) -> None:
+    upload_id = "calligraphy_0123456789abcdef"
+    (tmp_path / f"{upload_id}.webp").write_bytes(b"not-used-by-the-mock")
+    monkeypatch.setattr(main, "UPLOAD_ROOT", tmp_path)
+    monkeypatch.setattr(
+        main,
+        "stream_calligraphy_image",
+        lambda path, question, style: iter(("整体结构比较稳定。", "建议重点练横画收笔。")),
+    )
+
+    response = TestClient(main.app).post("/calligraphy/analyze/stream", json={"uploadId": upload_id})
+
+    assert response.status_code == 200
+    assert "event: chunk" in response.text
+    assert "整体结构比较稳定。" in response.text
     assert "event: done" in response.text

@@ -57,6 +57,18 @@ Content-Type: application/json
 
 > `POST /chat` 仍保留为兼容接口，使用字段 `message`，仅返回 `answer`。新功能请使用 `/api/chat`。
 
+### 已保存会话
+
+浏览器刷新或后端重启后，问答文字和参考资料会保存在本机的 `data/mozhi.sqlite3`，前端会自动恢复左侧会话列表。
+
+```http
+GET /api/chat/sessions
+GET /api/chat/sessions/{session_id}
+DELETE /api/chat/sessions/{session_id}
+```
+
+前者返回会话摘要；第二个接口返回按时间排序的消息、角色和每条回答的参考资料；`DELETE` 会永久删除指定会话。
+
 ## 2. 学习路径推荐
 
 ```http
@@ -107,7 +119,14 @@ Content-Type: application/json
 }
 ```
 
-`uploadId` 与 `imageUrl` 至少提供一个。该接口目前返回稳定的演示分析结果，等待后续接入视觉评分模型。
+`uploadId` 与 `imageUrl` 至少提供一个。接口会调用本地 `qwen2.5vl:7b` 分析图片中的章法、结构和用笔；结果用于练习参考，不是专业书法鉴定或权威评分。
+
+前端默认使用流式接口，回答会边生成边显示：
+
+```http
+POST /calligraphy/analyze/stream
+Content-Type: application/json
+```
 
 ## 4. 健康检查
 

@@ -329,6 +329,12 @@
     gap: 8px;
 }
 
+.conversation-row {
+    display: flex;
+    align-items: stretch;
+    gap: 6px;
+}
+
 .conversation-item,
 .choice-card {
     width: 100%;
@@ -337,6 +343,28 @@
     padding: 11px 12px;
     text-align: left;
     transition: background 160ms ease, border-color 160ms ease;
+}
+
+.conversation-row .conversation-item {
+    flex: 1;
+    min-width: 0;
+}
+
+.conversation-delete {
+    flex: 0 0 34px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    color: var(--color-muted);
+    font-size: 22px;
+    line-height: 1;
+    transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.conversation-delete:hover,
+.conversation-delete:focus-visible {
+    border-color: rgba(163, 59, 46, 0.3);
+    background: rgba(163, 59, 46, 0.08);
+    color: var(--color-primary);
 }
 
 .conversation-item:hover,

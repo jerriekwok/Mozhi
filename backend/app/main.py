@@ -1,20 +1,51 @@
 from __future__ import annotations
 
+import json
+import logging
+import re
+from contextlib import asynccontextmanager
 from pathlib import Path
 from uuid import uuid4
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from app.core.config import settings
 from app.routers import chat as chat_router
 from app.routers import learning as learning_router
 from app.services.rag_chain import invoke_rag
+from app.services.vision_analysis import (
+    VisionAnalysisError,
+    analyze_calligraphy_image,
+    preload_vision_model,
+    stream_calligraphy_image,
+    unload_vision_model,
+)
 
 
-app = FastAPI(title="Mozhi API", version="0.1.0")
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    """Keep the shared Qwen model warm for both chat and image analysis."""
+    try:
+        await run_in_threadpool(preload_vision_model)
+        logger.info("[model] Preloaded %s", settings.VISION_MODEL)
+    except VisionAnalysisError as exc:
+        logger.warning("[model] Preload skipped: %s", exc)
+
+    try:
+        yield
+    finally:
+        await run_in_threadpool(unload_vision_model)
+
+
+app = FastAPI(title="Mozhi API", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -39,9 +70,7 @@ ALLOWED_IMAGE_TYPES = {
     "image/png": ".png",
     "image/webp": ".webp",
 }
-
-app.mount("/uploads", StaticFiles(directory=PROJECT_ROOT / "uploads"), name="uploads")
-
+UPLOAD_ID_PATTERN = re.compile(r"calligraphy_[0-9a-f]{16}")
 
 class ChatRequest(BaseModel):
     """Compatibility schema used by the existing frontend."""
@@ -107,6 +136,29 @@ def normalize_style(style: str | None) -> str:
     return style_map.get(style.lower(), style)
 
 
+def resolve_uploaded_image(upload_id: str | None, image_url: str | None) -> Path:
+    """Resolve an analysis image while keeping requests inside the upload directory."""
+    if upload_id:
+        if not UPLOAD_ID_PATTERN.fullmatch(upload_id):
+            raise HTTPException(status_code=400, detail="Invalid uploadId")
+        for extension in ALLOWED_IMAGE_TYPES.values():
+            candidate = UPLOAD_ROOT / f"{upload_id}{extension}"
+            if candidate.is_file():
+                return candidate
+        raise HTTPException(status_code=404, detail="Uploaded image was not found")
+
+    prefix = "/uploads/calligraphy/"
+    if not image_url or not image_url.startswith(prefix):
+        raise HTTPException(status_code=400, detail="imageUrl must point to an uploaded calligraphy image")
+    filename = Path(image_url[len(prefix) :]).name
+    if filename != image_url[len(prefix) :] or Path(filename).suffix.lower() not in ALLOWED_IMAGE_TYPES.values():
+        raise HTTPException(status_code=400, detail="Invalid imageUrl")
+    candidate = UPLOAD_ROOT / filename
+    if not candidate.is_file():
+        raise HTTPException(status_code=404, detail="Uploaded image was not found")
+    return candidate
+
+
 @app.get("/")
 def root() -> dict[str, str]:
     return {"message": "Mozhi backend is running"}
@@ -165,28 +217,58 @@ async def upload_calligraphy_image(
 
 @app.post("/calligraphy/analyze", response_model=AnalyzeResponse)
 async def analyze_calligraphy(request: AnalyzeRequest) -> AnalyzeResponse:
-    """Reserved endpoint; it returns stable mock data until a vision model is added."""
+    """Analyze an uploaded calligraphy image using the local vision model."""
     if not request.uploadId and not request.imageUrl:
         raise HTTPException(status_code=400, detail="uploadId or imageUrl is required")
 
-    style = normalize_style(request.style)
-    focus = request.question or "整体章法、结构和用笔"
+    image_path = resolve_uploaded_image(request.uploadId, request.imageUrl)
+    try:
+        result = await run_in_threadpool(
+            analyze_calligraphy_image,
+            image_path,
+            request.question,
+            normalize_style(request.style) if request.style else None,
+        )
+    except VisionAnalysisError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     return AnalyzeResponse(
-        score=86,
-        style=style,
-        summary=f"已收到作品，当前按“{focus}”做基础分析：整体结构较稳，部分横画起收笔还可更明确。",
-        analysis=AnalyzeSections(
-            composition="章法基本整齐，字距略紧。可适当拉开行距并保留边缘留白。",
-            structure="重心较稳，个别字中宫偏紧。建议对照原帖检查主笔伸展。",
-            strokes="起笔较轻，转折处顿挫不够清晰。横画收笔和竖画力量可再加强。",
-        ),
-        suggestions=[
-            "先练习横画起笔和收笔，每次写 20 个，重点观察顿笔是否明确。",
-            f"临摹{style}时重点观察主笔伸展、转折力度和字内留白。",
-            "每次练习后圈出三个结构最不稳的字，单独复写并与原帖比较。",
-        ],
+        score=result["score"],
+        style=result["style"],
+        summary=result["summary"],
+        analysis=AnalyzeSections(**result["analysis"]),
+        suggestions=result["suggestions"],
     )
+
+
+@app.post("/calligraphy/analyze/stream")
+async def stream_calligraphy_analysis(request: AnalyzeRequest) -> StreamingResponse:
+    """Stream a vision-model critique of an uploaded calligraphy image."""
+    if not request.uploadId and not request.imageUrl:
+        raise HTTPException(status_code=400, detail="uploadId or imageUrl is required")
+
+    image_path = resolve_uploaded_image(request.uploadId, request.imageUrl)
+    style_hint = normalize_style(request.style) if request.style else None
+
+    async def event_generator():
+        try:
+            for chunk in stream_calligraphy_image(image_path, request.question, style_hint):
+                yield f"event: chunk\ndata: {json.dumps({'content': chunk}, ensure_ascii=False)}\n\n"
+            yield "event: done\ndata: {}\n\n"
+        except VisionAnalysisError as exc:
+            logger.warning("[vision] Stream failed: %s", exc)
+            yield f"event: error\ndata: {json.dumps({'error': str(exc)}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+    )
+
+
+# Register this after the upload endpoint. Otherwise the static-file mount
+# catches POST /uploads/calligraphy before FastAPI can process the upload.
+app.mount("/uploads", StaticFiles(directory=PROJECT_ROOT / "uploads"), name="uploads")
 
 
 app.include_router(chat_router.router)

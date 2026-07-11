@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import json
 import logging
-import threading
+import sqlite3
+import time
 import uuid
-from typing import Dict, List, Tuple
+from pathlib import Path
+from typing import Any
 
 from langchain_ollama import ChatOllama
 
@@ -11,81 +14,213 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# 全局内存存储，按 session_id 隔离
-_memory_store: Dict[str, List[Dict[str, str]]] = {}
-_lock = threading.RLock()
+# Chat records are kept outside the knowledge-base index, so rebuilding the
+# vector database will not erase a user's conversations.
+_CHAT_DB_PATH = Path(__file__).resolve().parents[3] / "data" / "mozhi.sqlite3"
+_MAX_HISTORY_TURNS = 6
+_MAX_HISTORY_CHARS = 3000
+_DEFAULT_TITLE = "新对话"
 
-# 配置项
-_MAX_HISTORY_TURNS = 6  # 保留最近 6 轮对话（用户 + AI = 12 条消息）
-_MAX_HISTORY_CHARS = 3000  # 历史字符数上限，超过时触发压缩
+
+def _now_ms() -> int:
+    return int(time.time() * 1000)
 
 
 def _get_session_key(session_id: str | None) -> str:
-    """确保返回有效的 session_id。"""
     return session_id or str(uuid.uuid4())
 
 
-def get_chat_history(session_id: str | None) -> List[Dict[str, str]]:
-    """获取指定 session 的对话历史（深拷贝，防止外部修改）。"""
+def _connect() -> sqlite3.Connection:
+    _CHAT_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(_CHAT_DB_PATH, timeout=10)
+    connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA foreign_keys = ON")
+    connection.execute("PRAGMA journal_mode = WAL")
+    connection.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS chat_sessions (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS chat_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT NOT NULL,
+            role TEXT NOT NULL CHECK(role IN ('human', 'ai')),
+            content TEXT NOT NULL,
+            sources_json TEXT NOT NULL DEFAULT '[]',
+            created_at INTEGER NOT NULL,
+            FOREIGN KEY(session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_chat_messages_session_created
+        ON chat_messages(session_id, created_at, id);
+        """
+    )
+    return connection
+
+
+def _title_from_message(content: str) -> str:
+    compact = " ".join(content.split())
+    if not compact:
+        return _DEFAULT_TITLE
+    return compact[:16] + ("..." if len(compact) > 16 else "")
+
+
+def _ensure_session(connection: sqlite3.Connection, session_id: str) -> None:
+    now = _now_ms()
+    connection.execute(
+        """
+        INSERT INTO chat_sessions (id, title, created_at, updated_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(id) DO NOTHING
+        """,
+        (session_id, _DEFAULT_TITLE, now, now),
+    )
+
+
+def _parse_sources(raw: str) -> list[dict[str, Any]]:
+    try:
+        value = json.loads(raw)
+    except (TypeError, json.JSONDecodeError):
+        return []
+    return value if isinstance(value, list) else []
+
+
+def get_chat_history(session_id: str | None) -> list[dict[str, str]]:
+    """Return the recent context used by RAG, without creating a new session."""
+    if not session_id:
+        return []
+
+    with _connect() as connection:
+        rows = connection.execute(
+            """
+            SELECT role, content
+            FROM chat_messages
+            WHERE session_id = ?
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?
+            """,
+            (session_id, _MAX_HISTORY_TURNS * 2),
+        ).fetchall()
+
+    return [{"role": row["role"], "content": row["content"]} for row in reversed(rows)]
+
+
+def add_message(
+    session_id: str | None,
+    role: str,
+    content: str,
+    sources: list[dict[str, Any]] | None = None,
+) -> str:
+    """Persist one message and return the actual conversation id."""
+    if role not in {"human", "ai"}:
+        raise ValueError("role must be 'human' or 'ai'")
+
     key = _get_session_key(session_id)
-    with _lock:
-        history = _memory_store.get(key, [])
-        return [dict(msg) for msg in history]
+    now = _now_ms()
+    serialized_sources = json.dumps(sources or [], ensure_ascii=False)
 
+    with _connect() as connection:
+        _ensure_session(connection, key)
+        connection.execute(
+            """
+            INSERT INTO chat_messages (session_id, role, content, sources_json, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (key, role, content, serialized_sources, now),
+        )
 
-def add_message(session_id: str | None, role: str, content: str) -> str:
-    """
-    向指定 session 添加一条消息，返回实际使用的 session_id。
-
-    role: "human" | "ai"
-    """
-    key = _get_session_key(session_id)
-    with _lock:
-        if key not in _memory_store:
-            _memory_store[key] = []
-        _memory_store[key].append({"role": role, "content": content})
-        # 裁剪：保留最近 _MAX_HISTORY_TURNS 轮（每轮 = 2 条消息）
-        max_messages = _MAX_HISTORY_TURNS * 2
-        if len(_memory_store[key]) > max_messages:
-            _memory_store[key] = _memory_store[key][-max_messages:]
+        if role == "human":
+            connection.execute(
+                """
+                UPDATE chat_sessions
+                SET title = CASE WHEN title = ? THEN ? ELSE title END,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (_DEFAULT_TITLE, _title_from_message(content), now, key),
+            )
+        else:
+            connection.execute(
+                "UPDATE chat_sessions SET updated_at = ? WHERE id = ?",
+                (now, key),
+            )
     return key
 
 
-def clear_history(session_id: str | None) -> str:
-    """清空指定 session 的历史，返回 session_id。"""
-    key = _get_session_key(session_id)
-    with _lock:
-        _memory_store.pop(key, None)
-    return key
+def list_chat_sessions(limit: int = 50) -> list[dict[str, Any]]:
+    """List saved conversations, newest first, without loading their messages."""
+    with _connect() as connection:
+        rows = connection.execute(
+            """
+            SELECT id, title, created_at, updated_at
+            FROM chat_sessions
+            ORDER BY updated_at DESC, id DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_chat_session(session_id: str) -> dict[str, Any] | None:
+    """Load a saved conversation, including source references for each answer."""
+    with _connect() as connection:
+        session = connection.execute(
+            "SELECT id, title, created_at, updated_at FROM chat_sessions WHERE id = ?",
+            (session_id,),
+        ).fetchone()
+        if session is None:
+            return None
+        rows = connection.execute(
+            """
+            SELECT id, role, content, sources_json, created_at
+            FROM chat_messages
+            WHERE session_id = ?
+            ORDER BY created_at ASC, id ASC
+            """,
+            (session_id,),
+        ).fetchall()
+
+    result = dict(session)
+    result["messages"] = [
+        {
+            "id": row["id"],
+            "role": row["role"],
+            "content": row["content"],
+            "sources": _parse_sources(row["sources_json"]),
+            "created_at": row["created_at"],
+        }
+        for row in rows
+    ]
+    return result
+
+
+def delete_chat_session(session_id: str) -> bool:
+    """Delete a saved conversation. Returns whether it existed."""
+    with _connect() as connection:
+        result = connection.execute("DELETE FROM chat_sessions WHERE id = ?", (session_id,))
+    return result.rowcount > 0
 
 
 def format_history(session_id: str | None) -> str:
-    """
-    将对话历史格式化为字符串，供 Prompt 使用。
-    如果历史过长，会先进行压缩（总结）。
-    """
+    """Format the recent chat turns for the RAG prompt."""
     history = get_chat_history(session_id)
     if not history:
         return ""
 
-    lines: List[str] = []
-    for msg in history:
-        role_label = "用户" if msg["role"] == "human" else "助手"
-        lines.append(f"{role_label}：{msg['content']}")
-
-    text = "\n".join(lines)
-
-    # 如果历史字符数超过阈值，进行压缩总结
-    if len(text) > _MAX_HISTORY_CHARS:
-        text = _compress_history(history)
-
-    return text
+    text = "\n".join(
+        f"{'用户' if message['role'] == 'human' else '助手'}：{message['content']}"
+        for message in history
+    )
+    return _compress_history(history) if len(text) > _MAX_HISTORY_CHARS else text
 
 
-def _compress_history(history: List[Dict[str, str]]) -> str:
-    """
-    使用 LLM 对过长的历史对话进行总结压缩，保留关键信息。
-    """
+def _compress_history(history: list[dict[str, str]]) -> str:
+    """Use the configured LLM only when the recent context exceeds its budget."""
     try:
         llm = ChatOllama(
             model=settings.LLM_MODEL,
@@ -94,43 +229,31 @@ def _compress_history(history: List[Dict[str, str]]) -> str:
             client_kwargs={"trust_env": False},
             async_client_kwargs={"trust_env": False},
         )
-
-        # 取最近 2 轮完整保留，其余早期对话进行总结
-        recent = history[-4:]  # 最近 2 轮（4 条消息）
+        recent = history[-4:]
         earlier = history[:-4]
-
         summary = ""
         if earlier:
             conversation_text = "\n".join(
-                f"{'用户' if m['role'] == 'human' else '助手'}：{m['content']}"
-                for m in earlier
-            )
-            prompt = (
-                "请对以下对话历史进行简洁总结，保留关键事实和背景信息，"
-                "不要遗漏用户提到的具体人名、书名、概念等重要信息。"
-                "总结控制在 200 字以内。\n\n"
-                f"{conversation_text}\n\n"
-                "总结："
+                f"{'用户' if item['role'] == 'human' else '助手'}：{item['content']}"
+                for item in earlier
             )
             try:
-                summary = llm.invoke(prompt).content.strip()
+                summary = llm.invoke(
+                    "请简洁总结以下早期对话，保留人名、作品和用户偏好等关键信息，控制在 200 字内。\n\n"
+                    f"{conversation_text}"
+                ).content.strip()
             except Exception as exc:
                 logger.warning("[memory] History compression failed: %s", exc)
-                # 压缩失败时，直接截断早期历史
-                summary = "（早期对话已省略）"
 
-        parts: List[str] = []
-        if summary:
-            parts.append(f"【历史对话总结】{summary}")
-        for m in recent:
-            role_label = "用户" if m["role"] == "human" else "助手"
-            parts.append(f"{role_label}：{m['content']}")
-
+        parts = [f"【历史对话总结】{summary}"] if summary else []
+        parts.extend(
+            f"{'用户' if item['role'] == 'human' else '助手'}：{item['content']}"
+            for item in recent
+        )
         return "\n".join(parts)
     except Exception as exc:
-        logger.warning("[memory] _compress_history failed: %s", exc)
-        # 降级：直接截断保留后半部分
+        logger.warning("[memory] History compression failed: %s", exc)
         return "\n".join(
-            f"{'用户' if m['role'] == 'human' else '助手'}：{m['content']}"
-            for m in history[-4:]
+            f"{'用户' if item['role'] == 'human' else '助手'}：{item['content']}"
+            for item in history[-4:]
         )

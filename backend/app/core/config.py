@@ -11,8 +11,11 @@ class Settings(BaseSettings):
 
     # Ollama 配置
     OLLAMA_BASE_URL: str = "http://localhost:11434"
-    LLM_MODEL: str = "qwen3:8b"
+    LLM_MODEL: str = "qwen2.5vl:7b"
+    VISION_MODEL: str = "qwen2.5vl:7b"
+    MODEL_KEEP_ALIVE: str = "-1m"
     EMBEDDING_MODEL: str = "bge-m3"
+    RETRIEVAL_SCORE_THRESHOLD: float = 0.40
 
     # Chroma 向量数据库配置
     CHROMA_PERSIST_PATH: str = "data/chroma_db"

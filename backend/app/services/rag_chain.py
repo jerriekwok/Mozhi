@@ -8,7 +8,6 @@ from typing import Any, Dict, Iterator, List
 from langchain_core.documents import Document
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import RunnableLambda, RunnableParallel, RunnablePassthrough
 from langchain_ollama import ChatOllama
 
 from app.core.config import settings
@@ -114,41 +113,10 @@ def _format_sources(docs: List[Document]) -> List[Dict[str, Any]]:
     return sources
 
 
-def _build_legacy_prompt() -> ChatPromptTemplate:
-    system_prompt = (
-        "你是一位精通中国书法的学者，擅长解答书法相关问题，尤其熟悉楷书、行书、草书、隶书、篆书、碑帖、笔法、"
-        "结字、章法、临摹、鉴赏与书法史。"
-        "\n\n"
-        "你必须严格基于提供的上下文回答问题，不得引入未给出的事实或个人臆测。"
-        "如果上下文不足以支撑回答，请直接输出：根据现有资料无法回答。"
-        "\n\n"
-        "回答要求："
-        "\n1. 使用中文回答。"
-        "\n2. 结构必须按以下顺序输出：定义/概述 -> 详细说明 -> 相关推荐。"
-        "\n3. 结合上下文中的来源信息，尽量在回答中自然提及相关资料来源。"
-        "\n4. 若问题包含多个子问题，请逐一回应，但仍保持上述结构。"
-        "\n5. 推荐给出的建议应尽量贴合书法学习、创作、临摹、鉴赏或理论研读场景。"
-        "\n6. 若上下文信息不足，除固定短语外不要编造补充内容。"
-    )
-
-    return ChatPromptTemplate.from_messages(
-        [
-            ("system", system_prompt),
-            (
-                "human",
-                "{chat_history}"
-                "问题：{question}\n\n"
-                "可用上下文：\n{context}\n\n"
-                "请按照要求输出答案。",
-            ),
-        ]
-    )
-
-
 def _build_prompt() -> ChatPromptTemplate:
     """Build a concise, teacher-like prompt for grounded calligraphy answers."""
     system_prompt = """
-你是“墨智”的书法老师。你熟悉中国书法、碑帖、书家和临摹方法，语气应当亲切、专业、克制，像在耐心回答一位学习者，而不是在背诵资料卡或写研究报告。
+你是“墨智”的书法老师。你熟悉中国书法、碑帖、书家和临摹方法。请像正常聊天一样，用现代、口语化但不随便的中文回答；说人话，不要像在背资料卡、写研究报告或故意模仿古人说话。
 
 只能依据提供的资料回答事实性问题；资料不足时，请坦率说明“现有资料不足以确认这一点”，不要补造细节。
 
@@ -158,6 +126,7 @@ def _build_prompt() -> ChatPromptTemplate:
 - 使用自然段。只有确实需要比较、列步骤或给练习清单时才使用短列表。
 - 避免固定的“定义/概述、详细说明、相关推荐”标题，也不要每句话都标注“资料1、资料2”。资料引用会由界面统一展示。
 - 避免重复同义形容词和空泛鼓励。对初学者给出一两条可以马上练习的具体建议。
+- 不用“书友安好”“笔墨洗砚”“愿与君共赏”“雅正”等文绉绉的套话；不需要寒暄时就直接回答问题。
 - 默认控制在 250 到 500 个中文字符；只有用户明确要求深入展开时再写长一些。
 """.strip()
 
@@ -174,11 +143,43 @@ def _build_prompt() -> ChatPromptTemplate:
     )
 
 
+def _build_direct_answer_prompt() -> ChatPromptTemplate:
+    """Prompt used when no local knowledge source is sufficiently relevant."""
+    system_prompt = """
+你是“墨智”，一位正常聊天、专业但不端着的书法学习助手。使用自然的现代中文，不要文言文、古风腔或过度客气的套话。
+当前没有找到足够相关的本地资料，因此不要伪造资料来源，也不要把不相关的内容硬套进回答。
+请根据用户问题自然回答：招呼、感谢、告别或使用帮助应简短回应；一般性书法问题可用你的通用知识说明；
+对无法可靠确认的具体事实，应坦率说明不确定，不要编造细节。不要提及“检索”“知识库”或“参考资料”。
+例如用户说“你好”，可以回答“你好！想了解哪方面的书法？”；不要回答“书友安好”“笔墨洗砚”等。
+""".strip()
+
+    return ChatPromptTemplate.from_messages(
+        [
+            ("system", system_prompt),
+            ("human", "{chat_history}用户问题：{question}"),
+        ]
+    )
+
+
 def _build_answer_chain():
     prompt = _build_prompt()
     llm = ChatOllama(
         model=settings.LLM_MODEL,
-        temperature=0.55,
+        temperature=0.35,
+        keep_alive=settings.MODEL_KEEP_ALIVE,
+        base_url=settings.OLLAMA_BASE_URL,
+        client_kwargs={"trust_env": False},
+        async_client_kwargs={"trust_env": False},
+    )
+    return prompt | llm | StrOutputParser()
+
+
+def _build_direct_answer_chain():
+    prompt = _build_direct_answer_prompt()
+    llm = ChatOllama(
+        model=settings.LLM_MODEL,
+        temperature=0.35,
+        keep_alive=settings.MODEL_KEEP_ALIVE,
         base_url=settings.OLLAMA_BASE_URL,
         client_kwargs={"trust_env": False},
         async_client_kwargs={"trust_env": False},
@@ -203,6 +204,13 @@ def _build_rag_input(payload: Dict[str, Any]) -> Dict[str, str]:
     }
 
 
+def _build_direct_answer_input(question: str, chat_history: str) -> Dict[str, str]:
+    formatted_history = chat_history.strip()
+    if formatted_history:
+        formatted_history = f"以下是对话历史：\n{formatted_history}\n\n"
+    return {"question": question, "chat_history": formatted_history}
+
+
 def _build_retrieval_query(question: str, session_id: str | None) -> str:
     """Expand referential follow-up questions with the last user question."""
     if not session_id or not any(marker in question for marker in _CONTEXTUAL_QUERY_MARKERS):
@@ -221,6 +229,11 @@ def _get_answer_chain_cached():
 
 
 @lru_cache(maxsize=1)
+def _get_direct_answer_chain_cached():
+    return _build_direct_answer_chain()
+
+
+@lru_cache(maxsize=1)
 def _get_retriever_cached():
     _get_vector_store_cached()
     return get_retriever()
@@ -231,25 +244,20 @@ def _get_vector_store_cached():
     return get_vector_store()
 
 
-@lru_cache(maxsize=1)
-def get_rag_chain():
-    """Return an executable LCEL RAG chain for question -> retrieval -> generation."""
-    retriever = _get_retriever_cached()
-    answer_chain = _get_answer_chain_cached()
-
-    return (
-        RunnableParallel(question=RunnablePassthrough(), docs=retriever)
-        | RunnableLambda(_build_rag_input)
-        | answer_chain
-    )
-
-
 def _retrieve_docs(question: str) -> List[Document]:
-    retriever = _get_retriever_cached()
-    docs = retriever.invoke(question)
-    if isinstance(docs, list):
-        return docs
-    return list(docs)
+    vector_store = _get_vector_store_cached()
+    scored_docs = vector_store.similarity_search_with_relevance_scores(question, k=4)
+    threshold = settings.RETRIEVAL_SCORE_THRESHOLD
+    docs = [doc for doc, score in scored_docs if score >= threshold]
+    best_score = max((score for _, score in scored_docs), default=0.0)
+    logger.info(
+        "[retrieval] query=%r best_score=%.3f threshold=%.3f matched=%d",
+        question,
+        best_score,
+        threshold,
+        len(docs),
+    )
+    return docs
 
 
 def invoke_rag(question: str, session_id: str | None = None) -> dict[str, Any]:
@@ -262,10 +270,8 @@ def invoke_rag(question: str, session_id: str | None = None) -> dict[str, Any]:
 
     docs = _retrieve_docs(_build_retrieval_query(question, session_id))
     if not docs:
-        return {
-            "answer": "根据现有资料无法回答",
-            "sources": [],
-        }
+        answer = _get_direct_answer_chain_cached().invoke(_build_direct_answer_input(question, chat_history))
+        return {"answer": str(answer).strip(), "sources": []}
 
     answer = _get_answer_chain_cached().invoke(
         _build_rag_input({"question": question, "docs": docs, "chat_history": chat_history})
@@ -286,12 +292,15 @@ def stream_rag(question: str, session_id: str | None = None) -> Iterator[dict[st
     chat_history = format_history(session_id) if session_id else ""
 
     docs = _retrieve_docs(_build_retrieval_query(question, session_id))
-    yield {"type": "sources", "sources": _format_sources(docs)}
-
     if not docs:
-        yield {"type": "chunk", "content": "根据现有资料无法回答"}
+        yield {"type": "sources", "sources": []}
+        for chunk in _get_direct_answer_chain_cached().stream(_build_direct_answer_input(question, chat_history)):
+            if chunk:
+                yield {"type": "chunk", "content": str(chunk)}
         yield {"type": "done"}
         return
+
+    yield {"type": "sources", "sources": _format_sources(docs)}
 
     chunk_iter = _get_answer_chain_cached().stream(
         _build_rag_input({"question": question, "docs": docs, "chat_history": chat_history})

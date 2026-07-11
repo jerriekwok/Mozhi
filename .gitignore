@@ -18,6 +18,9 @@ venv/
 # Runtime data generated locally
 data/chroma_db/
 backend/data/chroma_db/
+data/mozhi.sqlite3
+data/mozhi.sqlite3-shm
+data/mozhi.sqlite3-wal
 data/knowledge_base/*.skill
 uploads/*
 !uploads/.gitkeep

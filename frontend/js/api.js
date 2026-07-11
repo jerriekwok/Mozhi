@@ -6,7 +6,8 @@ function createOfflineChatAnswer(message, sessionId) {
     return {
         answer: `【离线模式】当前无法连接本地 RAG 服务。你提出的问题是：“${message}”。请检查后端和 Ollama 是否已启动。`,
         sources: [],
-        session_id: sessionId
+        session_id: sessionId,
+        offline: true
     };
 }
 
@@ -29,25 +30,31 @@ async function request(path, options = {}) {
         throw new Error(errorBody?.detail || `API request failed with status ${response.status}`);
     }
 
+    if (response.status === 204) {
+        return null;
+    }
+
     return response.json();
 }
 
-export async function chatWithAI(message, sessionId) {
-    if (!message) {
-        throw new Error("Message is required");
-    }
+export async function getChatSessions() {
+    return request("/api/chat/sessions");
+}
 
-    try {
-        return await request("/api/chat", {
-            method: "POST",
-            body: JSON.stringify({ question: message, session_id: sessionId || null })
-        });
-    } catch (error) {
-        if (error instanceof TypeError) {
-            return createOfflineChatAnswer(message, sessionId);
-        }
-        throw error;
+export async function getChatSession(sessionId) {
+    if (!sessionId) {
+        throw new Error("Conversation id is required");
     }
+    return request(`/api/chat/sessions/${encodeURIComponent(sessionId)}`);
+}
+
+export async function deleteChatSession(sessionId) {
+    if (!sessionId) {
+        throw new Error("Conversation id is required");
+    }
+    return request(`/api/chat/sessions/${encodeURIComponent(sessionId)}`, {
+        method: "DELETE"
+    });
 }
 
 function parseSseEvent(rawEvent) {
@@ -128,7 +135,7 @@ export async function chatWithAIStream(message, sessionId, handlers = {}) {
         if (done) break;
     }
 
-    return { answer, sources, session_id: completedSessionId };
+    return { answer, sources, session_id: completedSessionId, offline: false };
 }
 
 export async function generateLearningPlan(payload) {
@@ -167,6 +174,58 @@ export async function analyzeCalligraphy(payload) {
         method: "POST",
         body: JSON.stringify(payload)
     });
+}
+
+export async function analyzeCalligraphyStream(payload, handlers = {}) {
+    if (!payload || (!payload.uploadId && !payload.imageUrl)) {
+        throw new Error("uploadId or imageUrl is required");
+    }
+
+    const response = await fetch(`${API_BASE_URL}/calligraphy/analyze/stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+        const errorBody = await response.json().catch(() => null);
+        throw new Error(errorBody?.detail || `Image analysis failed with status ${response.status}`);
+    }
+    if (!response.body) {
+        throw new Error("Streaming response body is unavailable");
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+    let answer = "";
+
+    while (true) {
+        const { done, value } = await reader.read();
+        buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+
+        const events = buffer.split(/\r?\n\r?\n/);
+        buffer = events.pop() || "";
+
+        for (const rawEvent of events) {
+            if (!rawEvent.trim()) continue;
+            const { event, data } = parseSseEvent(rawEvent);
+
+            if (event === "chunk") {
+                const content = data.content || "";
+                answer += content;
+                handlers.onChunk?.(content, answer);
+            } else if (event === "done") {
+                handlers.onDone?.(answer);
+            } else if (event === "error") {
+                throw new Error(data.error || "Image analysis failed");
+            }
+        }
+
+        if (done) break;
+    }
+
+    return { answer };
 }
 
 export function getCopybooks() {
