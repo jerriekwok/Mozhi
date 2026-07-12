@@ -4,7 +4,7 @@
 
 > **使用说明：** 本项目仅用于课程设计、课题报告与教学展示，**不得用于商业用途**。集字创作所使用的第三方书法字库另有授权要求，详见 [第三方数据来源与授权](docs/第三方数据来源与授权.md)。
 
-> **字库鸣谢：** 集字创作模块使用莒光书法字库（calligraphy-community）提供的书法单字数据；其最初来源于 @zhuojg 发布的 [Chinese Calligraphy Dataset](https://github.com/zhuojg/chinese-calligraphy-dataset)。字库内容及 `index.json` 按 Apache License 2.0 使用，原始 `LICENSE` 与 `README.md` 随仓库保留。
+> **字库鸣谢：** 集字创作模块直接使用 [neil-zt/calligraphy-community（莒光书法字库）](https://github.com/neil-zt/calligraphy-community) 提供的书法单字数据；该字库 README 注明其更早上游来源为 @zhuojg 发布的 [Chinese Calligraphy Dataset](https://github.com/zhuojg/chinese-calligraphy-dataset)。字库内容及 `index.json` 按 Apache License 2.0 使用，原始 `LICENSE` 与 `README.md` 随仓库保留。
 
 ## 当前功能
 
