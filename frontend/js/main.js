@@ -2,16 +2,18 @@ import {
     analyzeCalligraphyStream,
     chatWithAIStream,
     deleteChatSession,
-    generateCalligraphy,
     generateLearningPlan,
     getChatSession,
     getChatSessions,
     getCalligraphyStyles,
     getCopybooks,
-    saveArtwork,
+    searchGlyphs,
     uploadCalligraphyImage
 } from "./api.js";
+import { drawArtworkPreview, exportArtworkPng } from "./features/create/artwork_renderer.js";
+import { createSourceList, renderChatMessages, updateStreamingMessage } from "./features/chat/message_view.js";
 import { initGallery } from "./gallery.js";
+import { $, $all, showToast } from "./shared/dom.js";
 import { quickQuestions, topics } from "../data/calligraphy.js";
 
 const state = {
@@ -21,20 +23,21 @@ const state = {
     pendingImage: null,
     selectedCopybookId: null,
     selectedStyleId: null,
-    styleFilter: "全部"
+    styleFilter: "全部",
+    glyphCharacters: [],
+    glyphSelections: [],
+    glyphTransforms: [],
+    selectedGlyphIndex: null
 };
 
 const ALLOWED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"];
 const DEFAULT_IMAGE_QUESTION = "请分析这张书法图片";
+const BACKEND_ORIGIN = "http://127.0.0.1:8000";
 let galleryController = null;
-
-function $(selector) {
-    return document.querySelector(selector);
-}
-
-function $all(selector) {
-    return Array.from(document.querySelectorAll(selector));
-}
+let glyphArtworkVersion = 0;
+let activeGlyphDrag = null;
+const GLYPH_GRID_SIZE = 12;
+const GLYPH_CENTER_SNAP_DISTANCE = 9;
 
 function createId() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2);
@@ -45,7 +48,9 @@ function normalizeSavedMessage(message) {
         id: String(message.id),
         role: message.role === "human" ? "user" : "assistant",
         content: message.content || "",
-        image: null,
+        image: message.image_url
+            ? { src: `${BACKEND_ORIGIN}${message.image_url}`, filename: "已上传书法图片" }
+            : null,
         sources: Array.isArray(message.sources) ? message.sources : [],
         timestamp: message.created_at || Date.now()
     };
@@ -99,16 +104,6 @@ async function loadSavedConversations() {
     ensureConversation();
     renderConversationList();
     renderMessages();
-}
-
-function showToast(text) {
-    const toast = $("#toast");
-    toast.textContent = text;
-    toast.hidden = false;
-    window.clearTimeout(showToast.timer);
-    showToast.timer = window.setTimeout(() => {
-        toast.hidden = true;
-    }, 2600);
 }
 
 function routeTo(route) {
@@ -221,104 +216,8 @@ function renderConversationList() {
         .join("");
 }
 
-function createImageButton(image) {
-    const button = document.createElement("button");
-    button.className = "message__image-button";
-    button.type = "button";
-    button.dataset.previewSrc = image.src;
-    button.dataset.previewAlt = image.filename || "书法图片";
-    button.setAttribute("aria-label", "查看图片");
-
-    const img = document.createElement("img");
-    img.src = image.src;
-    img.alt = image.filename || "书法图片";
-    img.loading = "lazy";
-
-    button.appendChild(img);
-    return button;
-}
-
-function createMessage(role, messageData) {
-    const message = document.createElement("article");
-    message.className = `message message--${role}`;
-
-    const bubble = document.createElement("div");
-    bubble.className = "message__bubble";
-
-    const content = typeof messageData === "string" ? messageData : messageData?.content || "";
-    const image = typeof messageData === "object" ? messageData?.image : null;
-    const sources = typeof messageData === "object" ? messageData?.sources : null;
-
-    if (content) {
-        const text = document.createElement("div");
-        text.className = "message__text";
-        text.textContent = content;
-        bubble.appendChild(text);
-    }
-
-    if (image?.src) {
-        bubble.appendChild(createImageButton(image));
-    }
-
-    if (role === "assistant" && Array.isArray(sources) && sources.length > 0) {
-        bubble.appendChild(createSourceList(sources));
-    }
-
-    message.appendChild(bubble);
-    return message;
-}
-
-function createSourceList(sources) {
-    const details = document.createElement("details");
-    details.className = "message__sources";
-
-    const summary = document.createElement("summary");
-    summary.textContent = `参考资料（${sources.length}）`;
-    details.appendChild(summary);
-
-    const list = document.createElement("ul");
-    sources.forEach((source) => {
-        const item = document.createElement("li");
-        const title = document.createElement("span");
-        title.className = "message__source-title";
-        title.textContent = source.title || source.file || "知识库资料";
-        item.appendChild(title);
-
-        if (source.file && source.file !== source.title) {
-            const file = document.createElement("small");
-            file.textContent = source.file;
-            item.appendChild(file);
-        }
-
-        if (source.content) {
-            const excerpt = document.createElement("p");
-            excerpt.textContent = source.content;
-            item.appendChild(excerpt);
-        }
-
-        list.appendChild(item);
-    });
-
-    details.appendChild(list);
-    return details;
-}
-
 function renderMessages(scrollBehavior = "smooth") {
-    const conversation = getCurrentConversation();
-    const list = $("#messageList");
-    const welcome = $("#chatWelcome");
-    list.innerHTML = "";
-
-    if (!conversation || conversation.messages.length === 0) {
-        welcome.hidden = false;
-        return;
-    }
-
-    welcome.hidden = true;
-    conversation.messages.forEach((message) => {
-        list.appendChild(createMessage(message.role, message));
-    });
-    $("#chatScroll").scrollTo({ top: $("#chatScroll").scrollHeight, behavior: scrollBehavior });
+    renderChatMessages(getCurrentConversation(), scrollBehavior);
 }
 
 function addMessage(role, content, image = null, sources = []) {
@@ -354,6 +253,17 @@ function addStreamingAssistantMessage(placeholder = "正在检索资料…") {
     renderConversationList();
     renderMessages("auto");
     return message;
+}
+
+function updateStreamingAssistantMessage(message) {
+    // A reply may still be streaming after the user switches to another
+    // conversation. Keep updating its data, but never redraw the conversation
+    // currently being viewed with a message from the previous one.
+    const owner = state.conversations.find((conversation) =>
+        conversation.messages.some((item) => item.id === message.id)
+    );
+    if (!owner || state.currentConversationId !== owner.id) return;
+    if (!updateStreamingMessage(message)) renderMessages("auto");
 }
 
 function createOfflineImageAnswer(question) {
@@ -585,7 +495,7 @@ async function initChat() {
                 const question = message || DEFAULT_IMAGE_QUESTION;
                 input.value = "";
                 resizeComposer();
-                addMessage("user", message, image);
+                const conversationId = addMessage("user", message || question, image);
                 clearPendingImage({ keepObjectUrl: true });
                 const assistantMessage = addStreamingAssistantMessage("正在分析图片…");
 
@@ -594,7 +504,8 @@ async function initChat() {
                     const data = await analyzeCalligraphyStream({
                         uploadId: uploadData.uploadId,
                         imageUrl: uploadData.imageUrl,
-                        question
+                        question,
+                        sessionId: conversationId
                     }, {
                         onChunk(chunk) {
                             if (assistantMessage.pending) {
@@ -602,7 +513,19 @@ async function initChat() {
                                 assistantMessage.pending = false;
                             }
                             assistantMessage.content += chunk;
-                            renderMessages("auto");
+                            updateStreamingAssistantMessage(assistantMessage);
+                        },
+                        onDone(sessionId) {
+                            if (!sessionId) return;
+                            const conversation = state.conversations.find((item) => item.id === conversationId);
+                            if (conversation) {
+                                conversation.id = sessionId;
+                                conversation.persisted = true;
+                                if (state.currentConversationId === conversationId) {
+                                    state.currentConversationId = sessionId;
+                                }
+                                renderConversationList();
+                            }
                         }
                     });
 
@@ -610,7 +533,7 @@ async function initChat() {
                         assistantMessage.content = data.answer || "图片分析完成，但没有返回具体内容。";
                         assistantMessage.pending = false;
                     }
-                    renderMessages("auto");
+                    updateStreamingAssistantMessage(assistantMessage);
                 } catch (error) {
                     assistantMessage.pending = false;
                     if (error instanceof TypeError) {
@@ -620,7 +543,7 @@ async function initChat() {
                         assistantMessage.content = `图片分析失败：${error.message || "请稍后重试。"}`;
                         showToast(error.message || "图片分析失败，请稍后重试。");
                     }
-                    renderMessages("auto");
+                    updateStreamingAssistantMessage(assistantMessage);
                 }
             } else {
                 input.value = "";
@@ -632,7 +555,7 @@ async function initChat() {
                     const data = await chatWithAIStream(message, conversationId, {
                         onSources(sources) {
                             assistantMessage.sources = sources;
-                            renderMessages("auto");
+                            if (state.currentConversationId === conversationId) renderMessages("auto");
                         },
                         onChunk(chunk) {
                             if (assistantMessage.pending) {
@@ -640,7 +563,7 @@ async function initChat() {
                                 assistantMessage.pending = false;
                             }
                             assistantMessage.content += chunk;
-                            renderMessages("auto");
+                            updateStreamingAssistantMessage(assistantMessage);
                         }
                     });
 
@@ -650,14 +573,15 @@ async function initChat() {
                     }
                     assistantMessage.sources = data.sources || assistantMessage.sources;
                     if (!data.offline) {
-                        getCurrentConversation().persisted = true;
+                        const conversation = state.conversations.find((item) => item.id === conversationId);
+                        if (conversation) conversation.persisted = true;
                     }
-                    renderMessages("auto");
+                    updateStreamingAssistantMessage(assistantMessage);
                 } catch (streamError) {
                     if (assistantMessage.pending) {
                         assistantMessage.content = "抱歉，当前无法完成回答，请稍后重试。";
                         assistantMessage.pending = false;
-                        renderMessages("auto");
+                        updateStreamingAssistantMessage(assistantMessage);
                     }
                     throw streamError;
                 }
@@ -700,11 +624,12 @@ function renderCopybookList() {
         .join("");
 }
 
-function renderCharacters() {
+function renderSamplePhrases() {
     const copybook = getCopybooks().find((item) => item.id === state.selectedCopybookId);
-    $("#characterGrid").innerHTML = copybook
-        ? copybook.characters.map((char) => `<button type="button" data-character="${char}">${char}</button>`).join("")
-        : `<p class="muted">请选择字帖</p>`;
+    const phrases = copybook?.phrases || [];
+    $("#samplePhraseList").innerHTML = phrases
+        .map((phrase) => `<button class="sample-phrase" type="button" data-sample-phrase="${phrase}">${phrase}</button>`)
+        .join("");
 }
 
 function renderStyles() {
@@ -725,15 +650,146 @@ function renderStyles() {
 function renderCreateStatus() {
     const copybook = getCopybooks().find((item) => item.id === state.selectedCopybookId);
     const style = getCalligraphyStyles().find((item) => item.id === state.selectedStyleId);
-    $("#createStatus").textContent = `当前风格：${style ? `${style.name} · ${style.calligrapher}` : "未选择"} · 当前字帖：${copybook ? `${copybook.calligrapher}《${copybook.name}》` : "未选择"}`;
+    const found = state.glyphCharacters.filter((item) => item.candidates.length > 0).length;
+    const missing = state.glyphCharacters.filter((item) => item.candidates.length === 0).map((item) => item.character);
+    const glyphStatus = state.glyphCharacters.length > 0
+        ? ` · 已找到 ${found}/${state.glyphCharacters.length} 字${missing.length ? ` · 缺字：${missing.join("、")}` : ""} · 已自动裁白边并统一视觉大小`
+        : "";
+    $("#createStatus").textContent = `当前风格：${style ? `${style.name} · ${style.calligrapher}` : "未选择"} · 当前字帖：${copybook ? `${copybook.calligrapher}《${copybook.name}》` : "未选择"}${glyphStatus}`;
+}
+
+function renderArtboard() {
+    const artboard = $("#artboard");
+    const version = ++glyphArtworkVersion;
+    if (state.glyphCharacters.length === 0) {
+        artboard.innerHTML = `
+            <div class="empty-art">
+                <span class="seal">集</span>
+                <h2>集字创作预览区</h2>
+                <p>选择字帖后输入文字，系统会从本地字库查找真实单字并自动竖排。</p>
+            </div>
+        `;
+        syncGlyphEditor();
+        return;
+    }
+
+    artboard.innerHTML = `
+        <div class="glyph-artwork" aria-label="集字作品预览">
+            ${state.glyphCharacters.map((item, index) => {
+                const candidate = item.candidates[state.glyphSelections[index] || 0];
+                return candidate
+                    ? `
+                        <div class="glyph-artwork__item ${state.selectedGlyphIndex === index ? "is-selected" : ""}" data-artwork-glyph-index="${index}" title="${item.character} · ${candidate.artist}">
+                            <canvas class="glyph-artwork__canvas" width="480" height="480" data-glyph-artwork-index="${index}" aria-label="${item.character}"></canvas>
+                        </div>
+                    `
+                    : `<span class="glyph-artwork__missing">缺${item.character}</span>`;
+            }).join("")}
+        </div>
+    `;
+
+    requestAnimationFrame(() => layoutGlyphArtwork(artboard));
+    void drawArtworkPreview({
+        artboard,
+        version,
+        getCurrentVersion: () => glyphArtworkVersion,
+        glyphCharacters: state.glyphCharacters,
+        glyphSelections: state.glyphSelections
+    });
+    syncGlyphEditor();
+}
+
+function defaultGlyphTransform() {
+    return { x: 0, y: 0, scale: 1, rotation: 0 };
+}
+
+function ensureGlyphTransforms() {
+    state.glyphTransforms = state.glyphCharacters.map(
+        (_, index) => state.glyphTransforms[index] || defaultGlyphTransform()
+    );
+}
+
+function getGlyphTransform(index) {
+    ensureGlyphTransforms();
+    return state.glyphTransforms[index];
+}
+
+function applyGlyphTransform(index) {
+    const item = document.querySelector(`[data-artwork-glyph-index="${index}"]`);
+    if (!item) return;
+    const transform = getGlyphTransform(index);
+    item.style.transform = `translate(-50%, -50%) translate(${transform.x}px, ${transform.y}px) scale(${transform.scale}) rotate(${transform.rotation}deg)`;
+    item.classList.toggle("is-selected", state.selectedGlyphIndex === index);
+}
+
+function clearArtworkSelection() {
+    state.selectedGlyphIndex = null;
+    document.querySelectorAll("[data-artwork-glyph-index]").forEach((item) => {
+        item.classList.remove("is-selected");
+    });
+    document.querySelector(".glyph-artwork")?.classList.remove("is-editing");
+    syncGlyphEditor();
+}
+
+function snapGlyphOffset(value) {
+    if (Math.abs(value) <= GLYPH_CENTER_SNAP_DISTANCE) return 0;
+    return Math.round(value / GLYPH_GRID_SIZE) * GLYPH_GRID_SIZE;
+}
+
+function layoutGlyphArtwork(artboard) {
+    const artwork = artboard.querySelector(".glyph-artwork");
+    if (!artwork || state.glyphCharacters.length === 0) return;
+    const height = artwork.clientHeight;
+    const width = artwork.clientWidth;
+    if (!height || !width) return;
+
+    const size = Math.min(width * 0.72, Math.max(72, (height - 16) / state.glyphCharacters.length * 0.92));
+    state.glyphCharacters.forEach((_, index) => {
+        const item = artwork.querySelector(`[data-artwork-glyph-index="${index}"]`);
+        if (!item) return;
+        item.style.setProperty("--glyph-size", `${size}px`);
+        item.style.left = "50%";
+        item.style.top = `${((index + 0.5) / state.glyphCharacters.length) * 100}%`;
+        applyGlyphTransform(index);
+    });
+}
+
+function syncGlyphEditor() {
+    const editor = $("#glyphEditor");
+    const index = state.selectedGlyphIndex;
+    const character = index === null ? null : state.glyphCharacters[index]?.character;
+    editor.hidden = !character;
+    if (!character) return;
+    const transform = getGlyphTransform(index);
+    $("#glyphEditHint").textContent = `正在调整“${character}”：拖动移动，滚轮缩放`;
+    $("#glyphRotation").value = String(transform.rotation);
+}
+
+function selectArtworkGlyph(index) {
+    state.selectedGlyphIndex = index;
+    applyGlyphTransform(index);
+    document.querySelectorAll("[data-artwork-glyph-index]").forEach((item) => {
+        const itemIndex = Number(item.dataset.artworkGlyphIndex);
+        item.classList.toggle("is-selected", itemIndex === index);
+    });
+    document.querySelector(".glyph-artwork")?.classList.add("is-editing");
+    syncGlyphEditor();
+}
+
+function resetGlyphLayout() {
+    state.glyphTransforms = state.glyphCharacters.map(() => defaultGlyphTransform());
+    state.selectedGlyphIndex = null;
+    renderArtboard();
 }
 
 function renderCreate() {
     renderCopybookTabs();
     renderCopybookList();
-    renderCharacters();
+    renderSamplePhrases();
     renderStyles();
+    renderArtboard();
     renderCreateStatus();
+    $("#exportArtworkButton").disabled = state.glyphCharacters.length === 0;
 }
 
 function renderLearningPlan(data) {
@@ -787,6 +843,10 @@ function initCreate() {
         if (!tab) return;
         state.styleFilter = tab.dataset.styleFilter;
         state.selectedCopybookId = null;
+        state.glyphCharacters = [];
+        state.glyphSelections = [];
+        state.glyphTransforms = [];
+        state.selectedGlyphIndex = null;
         renderCreate();
     });
 
@@ -794,6 +854,10 @@ function initCreate() {
         const item = event.target.closest("[data-select-copybook]");
         if (!item) return;
         state.selectedCopybookId = item.dataset.selectCopybook;
+        state.glyphCharacters = [];
+        state.glyphSelections = [];
+        state.glyphTransforms = [];
+        state.selectedGlyphIndex = null;
         renderCreate();
     });
 
@@ -801,16 +865,104 @@ function initCreate() {
         const item = event.target.closest("[data-select-style]");
         if (!item) return;
         state.selectedStyleId = item.dataset.selectStyle;
+        const style = getCalligraphyStyles().find((entry) => entry.id === state.selectedStyleId);
+        if (style) {
+            state.styleFilter = style.style;
+            const matchingCopybook = getCopybooks().find(
+                (copybook) => copybook.calligrapher === style.calligrapher
+            );
+            state.selectedCopybookId = matchingCopybook?.id || null;
+        }
+        state.glyphCharacters = [];
+        state.glyphSelections = [];
+        state.glyphTransforms = [];
+        state.selectedGlyphIndex = null;
         renderCreate();
     });
 
-    $("#characterGrid").addEventListener("click", (event) => {
-        const item = event.target.closest("[data-character]");
-        if (!item) return;
+    $("#samplePhraseList").addEventListener("click", (event) => {
+        const phrase = event.target.closest("[data-sample-phrase]");
+        if (!phrase) return;
         const input = $("#createTextInput");
-        input.value += item.dataset.character;
+        input.value = phrase.dataset.samplePhrase;
         input.focus();
+        showToast("已填入字帖推荐字句。");
     });
+
+    const artboard = $("#artboard");
+    artboard.addEventListener("pointerdown", (event) => {
+        const item = event.target.closest("[data-artwork-glyph-index]");
+        if (!item) {
+            clearArtworkSelection();
+            return;
+        }
+        const index = Number(item.dataset.artworkGlyphIndex);
+        const transform = getGlyphTransform(index);
+        selectArtworkGlyph(index);
+        activeGlyphDrag = {
+            index,
+            pointerId: event.pointerId,
+            startX: event.clientX,
+            startY: event.clientY,
+            originX: transform.x,
+            originY: transform.y
+        };
+        item.setPointerCapture(event.pointerId);
+        event.preventDefault();
+    });
+
+    artboard.addEventListener("pointermove", (event) => {
+        if (!activeGlyphDrag || activeGlyphDrag.pointerId !== event.pointerId) return;
+        const transform = getGlyphTransform(activeGlyphDrag.index);
+        transform.x = snapGlyphOffset(activeGlyphDrag.originX + event.clientX - activeGlyphDrag.startX);
+        transform.y = snapGlyphOffset(activeGlyphDrag.originY + event.clientY - activeGlyphDrag.startY);
+        applyGlyphTransform(activeGlyphDrag.index);
+    });
+
+    const finishGlyphDrag = (event) => {
+        if (!activeGlyphDrag || activeGlyphDrag.pointerId !== event.pointerId) return;
+        const item = event.target.closest("[data-artwork-glyph-index]");
+        if (item?.hasPointerCapture(event.pointerId)) item.releasePointerCapture(event.pointerId);
+        activeGlyphDrag = null;
+    };
+    artboard.addEventListener("pointerup", finishGlyphDrag);
+    artboard.addEventListener("pointercancel", finishGlyphDrag);
+
+    artboard.addEventListener("wheel", (event) => {
+        const item = event.target.closest("[data-artwork-glyph-index]");
+        if (!item) return;
+        const index = Number(item.dataset.artworkGlyphIndex);
+        const transform = getGlyphTransform(index);
+        transform.scale = Math.max(0.65, Math.min(1.55, transform.scale + (event.deltaY < 0 ? 0.05 : -0.05)));
+        selectArtworkGlyph(index);
+        applyGlyphTransform(index);
+        event.preventDefault();
+    }, { passive: false });
+
+    $("#glyphScaleDown").addEventListener("click", () => {
+        if (state.selectedGlyphIndex === null) return;
+        const transform = getGlyphTransform(state.selectedGlyphIndex);
+        transform.scale = Math.max(0.65, transform.scale - 0.05);
+        applyGlyphTransform(state.selectedGlyphIndex);
+    });
+    $("#glyphScaleUp").addEventListener("click", () => {
+        if (state.selectedGlyphIndex === null) return;
+        const transform = getGlyphTransform(state.selectedGlyphIndex);
+        transform.scale = Math.min(1.55, transform.scale + 0.05);
+        applyGlyphTransform(state.selectedGlyphIndex);
+    });
+    $("#glyphRotation").addEventListener("input", (event) => {
+        if (state.selectedGlyphIndex === null) return;
+        getGlyphTransform(state.selectedGlyphIndex).rotation = Number(event.target.value);
+        applyGlyphTransform(state.selectedGlyphIndex);
+    });
+    $("#glyphResetCurrent").addEventListener("click", () => {
+        if (state.selectedGlyphIndex === null) return;
+        state.glyphTransforms[state.selectedGlyphIndex] = defaultGlyphTransform();
+        applyGlyphTransform(state.selectedGlyphIndex);
+        syncGlyphEditor();
+    });
+    $("#glyphResetLayout").addEventListener("click", resetGlyphLayout);
 
     $("#generateButton").addEventListener("click", async () => {
         const text = $("#createTextInput").value.trim();
@@ -819,30 +971,71 @@ function initCreate() {
             return;
         }
 
-        const result = await generateCalligraphy({
-            text,
-            styleId: state.selectedStyleId,
-            copybookId: state.selectedCopybookId
-        });
-        showToast(result.message);
+        const copybook = getCopybooks().find((item) => item.id === state.selectedCopybookId);
+        const button = $("#generateButton");
+        if (!copybook?.glyphSource) {
+            showToast("请先选择已接入本地字库的字帖。");
+            return;
+        }
+
+        button.disabled = true;
+        button.textContent = "正在查字…";
+        try {
+            const result = await searchGlyphs(text, copybook.glyphSource);
+            state.glyphCharacters = result.characters || [];
+            state.glyphSelections = state.glyphCharacters.map(() => 0);
+            state.glyphTransforms = state.glyphCharacters.map(() => defaultGlyphTransform());
+            state.selectedGlyphIndex = null;
+            renderCreate();
+            if (result.missing_characters?.length) {
+                showToast(`已生成可用字形，缺字：${result.missing_characters.join("、")}`);
+            }
+        } catch (error) {
+            showToast(error.message || "字库查询失败，请检查后端服务。");
+        } finally {
+            button.disabled = false;
+            button.textContent = "开始集字";
+        }
     });
 
-    $("#saveArtworkButton").addEventListener("click", async () => {
-        const result = await saveArtwork({
-            title: $("#createTextInput").value.trim(),
-            imageUrl: "",
-            styleId: state.selectedStyleId,
-            copybookId: state.selectedCopybookId
-        });
-        showToast(result.message);
+    $("#exportArtworkButton").addEventListener("click", async () => {
+        const button = $("#exportArtworkButton");
+        button.disabled = true;
+        button.textContent = "正在导出…";
+        try {
+            await exportArtworkPng({
+                artboard: $("#artboard"),
+                glyphCharacters: state.glyphCharacters,
+                glyphSelections: state.glyphSelections,
+                getGlyphTransform,
+                title: $("#createTextInput").value
+            });
+            showToast("已导出 1800 × 2400 PNG。");
+        } catch (error) {
+            showToast(error.message || "导出失败，请稍后重试。");
+        } finally {
+            button.disabled = state.glyphCharacters.length === 0;
+            button.textContent = "导出 PNG";
+        }
     });
 }
 
-document.addEventListener("DOMContentLoaded", async () => {
+document.addEventListener("DOMContentLoaded", () => {
     renderHomeCopybooks();
-    await initChat();
+    initRouter();
     initLearning();
     initCreate();
-    galleryController = initGallery();
-    initRouter();
+
+    try {
+        galleryController = initGallery();
+        galleryController?.setActive(state.currentRoute === "gallery");
+    } catch (error) {
+        console.error("Gallery initialization failed:", error);
+        showToast("文化展馆暂时无法加载，其他功能仍可正常使用。");
+    }
+
+    void initChat().catch((error) => {
+        console.error("Chat initialization failed:", error);
+        showToast("聊天记录暂时无法加载，请检查后端服务。");
+    });
 });

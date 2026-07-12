@@ -207,12 +207,22 @@
                             <span class="seal seal--small">帖</span>
                             <div>
                                 <h2>字帖选字</h2>
-                                <p>素材图片待后端接入</p>
+                                <p>从本地字库查找真实单字</p>
                             </div>
                         </div>
                         <div class="style-tabs" id="copybookTabs"></div>
                         <div class="copybook-list" id="copybookList"></div>
-                        <div class="character-grid" id="characterGrid" aria-label="字帖字符"></div>
+                    </section>
+
+                    <section class="copybook-phrase-panel" aria-label="字帖推荐句">
+                        <div class="panel-title panel-title--compact">
+                            <span class="seal seal--small">句</span>
+                            <div>
+                                <h2>字帖推荐</h2>
+                                <p>仅展示可在当前字帖完整集出的句子</p>
+                            </div>
+                        </div>
+                        <div class="sample-phrase-list" id="samplePhraseList"></div>
                     </section>
 
                     <section class="create-panel">
@@ -220,7 +230,7 @@
                             <span class="seal seal--small">风</span>
                             <div>
                                 <h2>书法风格</h2>
-                                <p>用于后续生成参数</p>
+                                <p>用于选择集字书体</p>
                             </div>
                         </div>
                         <div class="style-list" id="styleList"></div>
@@ -229,9 +239,21 @@
 
                 <section class="create-workspace" aria-label="集字创作画布">
                     <div class="create-toolbar">
-                        <input id="createTextInput" type="text" placeholder="输入创作文字..." aria-label="输入创作文字">
-                        <button class="button button--primary" id="generateButton" type="button">生成预留</button>
-                        <button class="button button--ink" id="saveArtworkButton" type="button" disabled>保存</button>
+                        <input id="createTextInput" type="text" maxlength="10" placeholder="输入创作文字（最多 10 字）" aria-label="输入创作文字，最多十个字">
+                        <button class="button button--primary" id="generateButton" type="button">开始集字</button>
+                        <button class="button button--ink" id="exportArtworkButton" type="button" disabled>导出 PNG</button>
+                    </div>
+
+                    <div class="glyph-editor" id="glyphEditor" hidden>
+                        <span id="glyphEditHint">点击作品中的单字即可调整</span>
+                        <div class="glyph-editor__controls">
+                            <button type="button" id="glyphScaleDown" aria-label="缩小选中字">−</button>
+                            <span>大小</span>
+                            <button type="button" id="glyphScaleUp" aria-label="放大选中字">＋</button>
+                            <label>旋转 <input id="glyphRotation" type="range" min="-15" max="15" value="0" aria-label="旋转选中字"></label>
+                            <button type="button" id="glyphResetCurrent">重置此字</button>
+                            <button type="button" id="glyphResetLayout">恢复自动排版</button>
+                        </div>
                     </div>
 
                     <div class="artboard-wrap">
@@ -239,7 +261,7 @@
                             <div class="empty-art">
                                 <span class="seal">集</span>
                                 <h2>集字创作预览区</h2>
-                                <p>当前只做界面和接口预留，不生成假图片。后续接入素材库或生成服务后，这里显示真实作品。</p>
+                                <p>选择字帖后输入文字，系统会从本地字库查找真实单字并自动竖排。</p>
                             </div>
                         </div>
                     </div>

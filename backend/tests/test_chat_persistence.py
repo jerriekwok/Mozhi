@@ -38,6 +38,21 @@ def test_chat_records_are_saved_and_exposed_by_api(tmp_path, monkeypatch) -> Non
     assert detail.json()["messages"][1]["sources"][0]["file"] == "yan.md"
 
 
+def test_saved_message_can_include_local_image_path(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(memory, "_CHAT_DB_PATH", tmp_path / "mozhi.sqlite3")
+
+    memory.add_message(
+        "image-session",
+        "human",
+        "请分析这张书法图片。",
+        image_url="/uploads/calligraphy/calligraphy_example.jpg",
+    )
+    detail = memory.get_chat_session("image-session")
+
+    assert detail is not None
+    assert detail["messages"][0]["image_url"] == "/uploads/calligraphy/calligraphy_example.jpg"
+
+
 def test_unknown_saved_conversation_returns_not_found(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(memory, "_CHAT_DB_PATH", tmp_path / "mozhi.sqlite3")
 

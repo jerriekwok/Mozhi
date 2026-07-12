@@ -22,6 +22,10 @@ data/mozhi.sqlite3
 data/mozhi.sqlite3-shm
 data/mozhi.sqlite3-wal
 data/knowledge_base/*.skill
+
+# The third-party calligraphy glyph library is versioned with this course project.
+# Its upstream LICENSE and README must remain in data/glyph_library/calligraphy-community/.
+
 uploads/*
 !uploads/.gitkeep
 

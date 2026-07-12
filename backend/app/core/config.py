@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -8,6 +8,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 class Settings(BaseSettings):
     """RAG 应用全局配置，支持通过环境变量覆盖默认值。"""
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
     # Ollama 配置
     OLLAMA_BASE_URL: str = "http://localhost:11434"
@@ -19,6 +25,7 @@ class Settings(BaseSettings):
 
     # Chroma 向量数据库配置
     CHROMA_PERSIST_PATH: str = "data/chroma_db"
+    GLYPH_LIBRARY_PATH: str = "data/glyph_library/calligraphy-community"
 
     # Comma-separated source directories, relative to the project root by default.
     KNOWLEDGE_BASE_DIRS: str = (
@@ -39,18 +46,16 @@ class Settings(BaseSettings):
         ]
         return tuple(dict.fromkeys(paths))
 
+    @property
+    def glyph_library_path(self) -> Path:
+        return self._resolve_project_path(self.GLYPH_LIBRARY_PATH)
+
     @staticmethod
     def _resolve_project_path(value: str) -> Path:
         path = Path(value).expanduser()
         if not path.is_absolute():
             path = PROJECT_ROOT / path
         return path.resolve()
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        extra = "ignore"
-
 
 # 全局单例
 settings = Settings()

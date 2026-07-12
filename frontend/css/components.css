@@ -303,6 +303,17 @@
     font-size: 12px;
 }
 
+.panel-title--compact h2 {
+    font-size: 18px;
+}
+
+.panel-title--compact .seal--small {
+    width: 32px;
+    height: 32px;
+    flex-basis: 32px;
+    font-size: 17px;
+}
+
 .seal {
     display: grid;
     width: 48px;
@@ -715,28 +726,36 @@
     padding: 16px;
 }
 
-.character-grid {
+.sample-phrase-list {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 8px;
+    gap: 6px;
 }
 
-.character-grid button {
-    display: grid;
-    aspect-ratio: 1;
-    place-items: center;
-    border: 1px solid var(--color-line);
-    border-radius: var(--radius-sm);
-    background: var(--color-rice);
-    color: var(--color-ink);
+.sample-phrase {
+    width: 100%;
+    border: 1px solid rgba(163, 59, 46, 0.18);
+    border-radius: 7px;
+    padding: 7px 9px;
+    background: rgba(255, 252, 246, 0.7);
+    color: var(--color-ink-soft);
+    cursor: pointer;
     font-family: var(--font-calligraphy);
-    font-size: 22px;
-    transition: transform 160ms ease, border-color 160ms ease;
+    font-size: 16px;
+    text-align: left;
 }
 
-.character-grid button:hover {
-    border-color: rgba(163, 59, 46, 0.4);
-    transform: translateY(-2px);
+.sample-phrase::before {
+    margin-right: 6px;
+    color: var(--color-primary);
+    content: "荐";
+    font-family: var(--font-body);
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.sample-phrase:hover {
+    border-color: rgba(163, 59, 46, 0.45);
+    background: rgba(163, 59, 46, 0.08);
 }
 
 .create-toolbar input {
@@ -759,6 +778,116 @@
     aspect-ratio: 3 / 4;
     place-items: center;
     border-radius: var(--radius-md);
+}
+
+.glyph-artwork {
+    position: relative;
+    width: min(82%, 430px);
+    height: 88%;
+}
+
+.glyph-artwork.is-editing {
+    background-image:
+        linear-gradient(rgba(163, 59, 46, 0.055) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(163, 59, 46, 0.055) 1px, transparent 1px);
+    background-position: center;
+    background-size: 12px 12px;
+}
+
+.glyph-artwork.is-editing::after {
+    position: absolute;
+    inset: 0;
+    content: "";
+    pointer-events: none;
+    background:
+        linear-gradient(90deg, transparent calc(50% - 0.5px), rgba(163, 59, 46, 0.22) calc(50% - 0.5px), rgba(163, 59, 46, 0.22) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
+        linear-gradient(transparent calc(50% - 0.5px), rgba(163, 59, 46, 0.22) calc(50% - 0.5px), rgba(163, 59, 46, 0.22) calc(50% + 0.5px), transparent calc(50% + 0.5px));
+}
+
+.glyph-artwork__item {
+    position: absolute;
+    width: var(--glyph-size, 120px);
+    height: var(--glyph-size, 120px);
+    touch-action: none;
+    cursor: grab;
+    transform: translate(-50%, -50%);
+    transition: box-shadow 150ms ease;
+    user-select: none;
+    will-change: transform;
+}
+
+.glyph-artwork__item:active {
+    cursor: grabbing;
+}
+
+.glyph-artwork__item.is-selected {
+    outline: 1px dashed rgba(163, 59, 46, 0.72);
+    outline-offset: 4px;
+    box-shadow: 0 0 0 4px rgba(163, 59, 46, 0.1);
+}
+
+.glyph-artwork__canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+}
+
+.glyph-artwork__fallback {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.glyph-artwork__missing {
+    display: grid;
+    min-height: 44px;
+    place-items: center;
+    border: 1px dashed rgba(163, 59, 46, 0.45);
+    color: var(--color-primary);
+}
+
+.glyph-editor {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border-bottom: 1px solid var(--color-line);
+    padding: 8px 16px;
+    background: rgba(255, 252, 246, 0.78);
+    color: var(--color-ink-soft);
+    font-size: 13px;
+}
+
+.glyph-editor[hidden] {
+    display: none;
+}
+
+.glyph-editor__controls {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.glyph-editor button {
+    border: 1px solid var(--color-line);
+    border-radius: 6px;
+    padding: 4px 8px;
+    background: var(--color-rice);
+    color: var(--color-ink);
+    cursor: pointer;
+}
+
+.glyph-editor label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.glyph-editor input[type="range"] {
+    width: 76px;
+    accent-color: var(--color-primary);
 }
 
 .empty-art {
@@ -859,10 +988,6 @@
 
     .send-button {
         min-width: 96px;
-    }
-
-    .character-grid {
-        grid-template-columns: repeat(5, minmax(42px, 1fr));
     }
 
     .artboard {

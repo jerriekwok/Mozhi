@@ -104,7 +104,7 @@ export async function chatWithAIStream(message, sessionId, handlers = {}) {
     let buffer = "";
     let answer = "";
     let sources = [];
-    let completedSessionId = sessionId;
+    let completedSessionId = sessionId || null;
 
     while (true) {
         const { done, value } = await reader.read();
@@ -165,17 +165,6 @@ export async function uploadCalligraphyImage(file, options = {}) {
     });
 }
 
-export async function analyzeCalligraphy(payload) {
-    if (!payload || (!payload.uploadId && !payload.imageUrl)) {
-        throw new Error("uploadId or imageUrl is required");
-    }
-
-    return request("/calligraphy/analyze", {
-        method: "POST",
-        body: JSON.stringify(payload)
-    });
-}
-
 export async function analyzeCalligraphyStream(payload, handlers = {}) {
     if (!payload || (!payload.uploadId && !payload.imageUrl)) {
         throw new Error("uploadId or imageUrl is required");
@@ -199,6 +188,7 @@ export async function analyzeCalligraphyStream(payload, handlers = {}) {
     const decoder = new TextDecoder("utf-8");
     let buffer = "";
     let answer = "";
+    let completedSessionId = payload.sessionId || null;
 
     while (true) {
         const { done, value } = await reader.read();
@@ -216,7 +206,8 @@ export async function analyzeCalligraphyStream(payload, handlers = {}) {
                 answer += content;
                 handlers.onChunk?.(content, answer);
             } else if (event === "done") {
-                handlers.onDone?.(answer);
+                completedSessionId = data.session_id || completedSessionId;
+                handlers.onDone?.(completedSessionId, answer);
             } else if (event === "error") {
                 throw new Error(data.error || "Image analysis failed");
             }
@@ -225,7 +216,29 @@ export async function analyzeCalligraphyStream(payload, handlers = {}) {
         if (done) break;
     }
 
-    return { answer };
+    return { answer, session_id: completedSessionId };
+}
+
+export async function searchGlyphs(text, source) {
+    if (!text?.trim()) {
+        throw new Error("创作文字不能为空");
+    }
+    if (!source) {
+        throw new Error("请先选择字帖");
+    }
+
+    const query = new URLSearchParams({ text: text.trim(), source, limit: "12" });
+    const result = await request(`/api/glyphs/search?${query.toString()}`);
+    return {
+        ...result,
+        characters: (result.characters || []).map((item) => ({
+            ...item,
+            candidates: (item.candidates || []).map((candidate) => ({
+                ...candidate,
+                imageUrl: candidate.image_url
+            }))
+        }))
+    };
 }
 
 export function getCopybooks() {
@@ -234,21 +247,4 @@ export function getCopybooks() {
 
 export function getCalligraphyStyles() {
     return calligraphyStyles;
-}
-
-export async function generateCalligraphy(payload) {
-    console.info("generateCalligraphy reserved payload:", payload);
-    return {
-        status: "reserved",
-        imageUrl: "",
-        message: "集字创作接口尚未接入，当前仅展示界面预留。"
-    };
-}
-
-export async function saveArtwork(payload) {
-    console.info("saveArtwork reserved payload:", payload);
-    return {
-        status: "reserved",
-        message: "作品保存接口尚未接入。"
-    };
 }

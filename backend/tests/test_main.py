@@ -12,6 +12,8 @@ if str(BACKEND_DIR) not in sys.path:
 
 import app.main as main  # noqa: E402
 from app.routers import chat as chat_router  # noqa: E402
+from app.routers import calligraphy as calligraphy_router  # noqa: E402
+from app.services import memory  # noqa: E402
 from app.services.vision_analysis import VisionAnalysisError  # noqa: E402
 
 
@@ -139,9 +141,9 @@ def test_calligraphy_analysis_uses_local_vision_model(tmp_path, monkeypatch) -> 
     upload_id = "calligraphy_0123456789abcdef"
     image_path = tmp_path / f"{upload_id}.jpg"
     image_path.write_bytes(b"not-used-by-the-mock")
-    monkeypatch.setattr(main, "UPLOAD_ROOT", tmp_path)
+    monkeypatch.setattr(calligraphy_router, "UPLOAD_ROOT", tmp_path)
     monkeypatch.setattr(
-        main,
+        calligraphy_router,
         "analyze_calligraphy_image",
         lambda path, question, style: {
             "score": 72,
@@ -167,7 +169,7 @@ def test_calligraphy_analysis_uses_local_vision_model(tmp_path, monkeypatch) -> 
 
 
 def test_calligraphy_upload_endpoint_is_not_shadowed_by_static_files(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr(main, "UPLOAD_ROOT", tmp_path)
+    monkeypatch.setattr(calligraphy_router, "UPLOAD_ROOT", tmp_path)
     response = TestClient(main.app).post(
         "/uploads/calligraphy",
         data={"purpose": "analysis"},
@@ -181,12 +183,12 @@ def test_calligraphy_upload_endpoint_is_not_shadowed_by_static_files(tmp_path, m
 def test_calligraphy_analysis_reports_unavailable_vision_model(tmp_path, monkeypatch) -> None:
     upload_id = "calligraphy_0123456789abcdef"
     (tmp_path / f"{upload_id}.png").write_bytes(b"not-used-by-the-mock")
-    monkeypatch.setattr(main, "UPLOAD_ROOT", tmp_path)
+    monkeypatch.setattr(calligraphy_router, "UPLOAD_ROOT", tmp_path)
 
     def fail(*args, **kwargs):
         raise VisionAnalysisError("Vision model is unavailable")
 
-    monkeypatch.setattr(main, "analyze_calligraphy_image", fail)
+    monkeypatch.setattr(calligraphy_router, "analyze_calligraphy_image", fail)
 
     response = TestClient(main.app).post("/calligraphy/analyze", json={"uploadId": upload_id})
 
@@ -197,16 +199,24 @@ def test_calligraphy_analysis_reports_unavailable_vision_model(tmp_path, monkeyp
 def test_calligraphy_analysis_can_stream_model_output(tmp_path, monkeypatch) -> None:
     upload_id = "calligraphy_0123456789abcdef"
     (tmp_path / f"{upload_id}.webp").write_bytes(b"not-used-by-the-mock")
-    monkeypatch.setattr(main, "UPLOAD_ROOT", tmp_path)
+    monkeypatch.setattr(calligraphy_router, "UPLOAD_ROOT", tmp_path)
+    monkeypatch.setattr(memory, "_CHAT_DB_PATH", tmp_path / "mozhi.sqlite3")
     monkeypatch.setattr(
-        main,
+        calligraphy_router,
         "stream_calligraphy_image",
         lambda path, question, style: iter(("整体结构比较稳定。", "建议重点练横画收笔。")),
     )
 
-    response = TestClient(main.app).post("/calligraphy/analyze/stream", json={"uploadId": upload_id})
+    response = TestClient(main.app).post(
+        "/calligraphy/analyze/stream",
+        json={"uploadId": upload_id, "sessionId": "image-stream-session"},
+    )
 
     assert response.status_code == 200
     assert "event: chunk" in response.text
     assert "整体结构比较稳定。" in response.text
     assert "event: done" in response.text
+    saved = memory.get_chat_session("image-stream-session")
+    assert saved is not None
+    assert saved["messages"][0]["image_url"] == f"/uploads/calligraphy/{upload_id}.webp"
+    assert saved["messages"][1]["content"] == "整体结构比较稳定。建议重点练横画收笔。"

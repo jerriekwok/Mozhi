@@ -6,8 +6,9 @@ from fastapi import APIRouter, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
-from app.routers.chat import Source, _map_raw_sources
+from app.schemas.common import Source
 from app.services.rag_chain import invoke_rag
+from app.services.source_mapper import map_raw_sources
 
 
 router = APIRouter(prefix="/api/learning", tags=["learning"])
@@ -65,5 +66,5 @@ async def create_learning_plan(request: LearningPlanRequest) -> LearningPlanResp
 
     return LearningPlanResponse(
         plan=plan,
-        sources=_map_raw_sources(result.get("sources") or []),
+        sources=map_raw_sources(result.get("sources") or []),
     )

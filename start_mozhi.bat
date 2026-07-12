@@ -12,10 +12,10 @@ if not exist "%PYTHON%" (
 )
 
 echo Starting Mozhi backend on http://127.0.0.1:8000 ...
-start "Mozhi Backend" /D "%ROOT%backend" "%PYTHON%" -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+start "Mozhi Backend" /D "%ROOT%backend" cmd.exe /k ""%PYTHON%" -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000"
 
 echo Starting Mozhi frontend on http://127.0.0.1:8080 ...
-start "Mozhi Frontend" /D "%ROOT%" "%PYTHON%" "%ROOT%frontend\server.py"
+start "Mozhi Frontend" /D "%ROOT%" cmd.exe /k ""%PYTHON%" "%ROOT%frontend\server.py""
 
 echo.
 echo Mozhi is starting in two separate windows.

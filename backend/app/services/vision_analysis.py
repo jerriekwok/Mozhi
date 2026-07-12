@@ -6,9 +6,10 @@ import re
 from pathlib import Path
 from typing import Any
 
-from ollama import Client, ResponseError
+from ollama import ResponseError
 
 from app.core.config import settings
+from app.services.model_runtime import get_ollama_client
 
 
 logger = logging.getLogger(__name__)
@@ -17,40 +18,6 @@ _CODE_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.IGNORECASE)
 
 class VisionAnalysisError(RuntimeError):
     """Raised when the local vision model cannot produce a usable analysis."""
-
-
-def preload_vision_model() -> None:
-    """Load the shared text-and-vision model once when the API starts."""
-    try:
-        Client(host=settings.OLLAMA_BASE_URL).generate(
-            model=settings.VISION_MODEL,
-            prompt="",
-            keep_alive=settings.MODEL_KEEP_ALIVE,
-        )
-    except Exception as exc:
-        raise VisionAnalysisError("Vision model could not be preloaded") from exc
-
-
-def unload_vision_model() -> None:
-    """Ask Ollama to release the shared generation and embedding models on shutdown."""
-    try:
-        client = Client(host=settings.OLLAMA_BASE_URL)
-        client.generate(
-            model=settings.VISION_MODEL,
-            prompt="",
-            keep_alive=0,
-        )
-    except Exception as exc:
-        logger.warning("[vision] Could not unload model during shutdown: %s", exc)
-
-    try:
-        Client(host=settings.OLLAMA_BASE_URL).embed(
-            model=settings.EMBEDDING_MODEL,
-            input="",
-            keep_alive=0,
-        )
-    except Exception as exc:
-        logger.warning("[vision] Could not unload embedding model during shutdown: %s", exc)
 
 
 def _strip_code_fence(content: str) -> str:
@@ -143,7 +110,7 @@ def analyze_calligraphy_image(
     )
 
     try:
-        client = Client(host=settings.OLLAMA_BASE_URL)
+        client = get_ollama_client()
         response = client.chat(
             model=settings.VISION_MODEL,
             messages=[
@@ -194,7 +161,7 @@ def stream_calligraphy_image(
     )
 
     try:
-        client = Client(host=settings.OLLAMA_BASE_URL)
+        client = get_ollama_client()
         response = client.chat(
             model=settings.VISION_MODEL,
             messages=[

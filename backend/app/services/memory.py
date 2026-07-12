@@ -51,6 +51,7 @@ def _connect() -> sqlite3.Connection:
             role TEXT NOT NULL CHECK(role IN ('human', 'ai')),
             content TEXT NOT NULL,
             sources_json TEXT NOT NULL DEFAULT '[]',
+            image_url TEXT,
             created_at INTEGER NOT NULL,
             FOREIGN KEY(session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
         );
@@ -59,6 +60,9 @@ def _connect() -> sqlite3.Connection:
         ON chat_messages(session_id, created_at, id);
         """
     )
+    columns = {row["name"] for row in connection.execute("PRAGMA table_info(chat_messages)")}
+    if "image_url" not in columns:
+        connection.execute("ALTER TABLE chat_messages ADD COLUMN image_url TEXT")
     return connection
 
 
@@ -114,6 +118,7 @@ def add_message(
     role: str,
     content: str,
     sources: list[dict[str, Any]] | None = None,
+    image_url: str | None = None,
 ) -> str:
     """Persist one message and return the actual conversation id."""
     if role not in {"human", "ai"}:
@@ -127,10 +132,10 @@ def add_message(
         _ensure_session(connection, key)
         connection.execute(
             """
-            INSERT INTO chat_messages (session_id, role, content, sources_json, created_at)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO chat_messages (session_id, role, content, sources_json, image_url, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (key, role, content, serialized_sources, now),
+            (key, role, content, serialized_sources, image_url, now),
         )
 
         if role == "human":
@@ -177,7 +182,7 @@ def get_chat_session(session_id: str) -> dict[str, Any] | None:
             return None
         rows = connection.execute(
             """
-            SELECT id, role, content, sources_json, created_at
+            SELECT id, role, content, sources_json, image_url, created_at
             FROM chat_messages
             WHERE session_id = ?
             ORDER BY created_at ASC, id ASC
@@ -192,6 +197,7 @@ def get_chat_session(session_id: str) -> dict[str, Any] | None:
             "role": row["role"],
             "content": row["content"],
             "sources": _parse_sources(row["sources_json"]),
+            "image_url": row["image_url"],
             "created_at": row["created_at"],
         }
         for row in rows

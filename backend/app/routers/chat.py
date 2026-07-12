@@ -9,19 +9,16 @@ from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from starlette.concurrency import iterate_in_threadpool
 
+from app.schemas.common import Source
 from app.services.memory import add_message, delete_chat_session, get_chat_session, list_chat_sessions
 from app.services.rag_chain import invoke_rag, stream_rag
+from app.services.source_mapper import map_raw_sources
 
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/chat", tags=["chat"])
-
-
-class Source(BaseModel):
-    title: str = Field(default="", description="Source title or section heading")
-    content: str = Field(default="", description="Retrieved source excerpt")
-    file: str = Field(default="", description="Source file name")
 
 
 class ChatRequest(BaseModel):
@@ -40,6 +37,7 @@ class SavedMessage(BaseModel):
     role: str
     content: str
     sources: list[Source] = Field(default_factory=list)
+    image_url: str | None = None
     created_at: int
 
 
@@ -52,34 +50,6 @@ class ChatSessionSummary(BaseModel):
 
 class ChatSessionDetail(ChatSessionSummary):
     messages: list[SavedMessage] = Field(default_factory=list)
-
-
-def _map_raw_sources(raw_sources: list[dict[str, Any]]) -> list[Source]:
-    mapped: list[Source] = []
-    seen_files: set[str] = set()
-
-    for source in raw_sources:
-        filename = str(source.get("filename") or source.get("source") or "")
-        if filename and filename in seen_files:
-            continue
-        seen_files.add(filename)
-
-        heading = source.get("heading_path")
-        title = str(source.get("chapter_title") or "")
-        if not title and isinstance(heading, list):
-            title = " > ".join(str(item) for item in heading if item)
-        if not title:
-            title = str(heading or source.get("source") or filename)
-
-        mapped.append(
-            Source(
-                title=title,
-                content=str(source.get("snippet") or ""),
-                file=filename,
-            )
-        )
-
-    return mapped
 
 
 def _client_ip(request: Request) -> str:
@@ -132,7 +102,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     answer = str(result.get("answer") or "").strip()
     if not answer:
         answer = "根据现有资料无法回答。"
-    sources = _map_raw_sources(result.get("sources") or [])
+    sources = map_raw_sources(result.get("sources") or [])
 
     # Save only after generation so the current question is not duplicated in its own prompt.
     add_message(session_id, "human", question)
@@ -154,10 +124,12 @@ async def chat_stream(request: ChatRequest, http_request: Request) -> StreamingR
         mapped_sources: list[Source] = []
 
         try:
-            for event in stream_rag(question, session_id=session_id):
+            # The local model is exposed as a synchronous generator.  Advance it
+            # in a worker thread so history requests can run during generation.
+            async for event in iterate_in_threadpool(stream_rag(question, session_id=session_id)):
                 event_type = event.get("type", "chunk")
                 if event_type == "sources":
-                    mapped_sources = _map_raw_sources(event.get("sources") or [])
+                    mapped_sources = map_raw_sources(event.get("sources") or [])
                     payload = {"sources": [item.model_dump() for item in mapped_sources]}
                     yield f"event: sources\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
                     add_message(session_id, "human", question)
