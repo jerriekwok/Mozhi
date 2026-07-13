@@ -1,3 +1,4 @@
+import httpx
 import logging
 from functools import lru_cache
 
@@ -16,7 +17,9 @@ class ModelRuntimeError(RuntimeError):
 @lru_cache(maxsize=1)
 def get_ollama_client() -> Client:
     """Return one shared Ollama client for the process."""
-    return Client(host=settings.OLLAMA_BASE_URL)
+    # 显式禁用代理，避免 Windows 或系统代理环境导致本地请求 502
+    # kwargs 会透传给 httpx.Client，所以 proxy=None 可直接生效
+    return Client(host=settings.OLLAMA_BASE_URL, proxy=None, timeout=300.0)
 
 
 def preload_models() -> None:

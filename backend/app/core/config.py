@@ -17,8 +17,8 @@ class Settings(BaseSettings):
 
     # Ollama 配置
     OLLAMA_BASE_URL: str = "http://localhost:11434"
-    LLM_MODEL: str = "qwen2.5vl:7b"
-    VISION_MODEL: str = "qwen2.5vl:7b"
+    LLM_MODEL: str = "qwen2.5vl:3b"
+    VISION_MODEL: str = "qwen2.5vl:3b"
     MODEL_KEEP_ALIVE: str = "-1m"
     EMBEDDING_MODEL: str = "bge-m3"
     RETRIEVAL_SCORE_THRESHOLD: float = 0.40

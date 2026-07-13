@@ -77,14 +77,21 @@ function getArtworkLayout(artboard, glyphCharacters, direction = "vertical") {
     const count = glyphCharacters.length;
     if (!artwork || !count || !artwork.clientWidth || !artwork.clientHeight) return null;
     const isHorizontal = direction === "horizontal";
+    const artboardWidth = parseFloat(artboard.style.width) || artboard.clientWidth;
+    const artboardHeight = parseFloat(artboard.style.height) || artboard.clientHeight;
+
     const artboardRect = artboard.getBoundingClientRect();
+    const artworkRect = artwork.getBoundingClientRect();
+    const offsetX = artworkRect.left - artboardRect.left;
+    const offsetY = artworkRect.top - artboardRect.top;
+
     return {
-        artboardWidth: artboardRect.width || artboard.clientWidth,
-        artboardHeight: artboardRect.height || artboard.clientHeight,
+        artboardWidth,
+        artboardHeight,
         width: artwork.clientWidth,
         height: artwork.clientHeight,
-        offsetX: artwork.offsetLeft,
-        offsetY: artwork.offsetTop,
+        offsetX,
+        offsetY,
         glyphSize: isHorizontal
             ? Math.min(artwork.clientHeight * 0.72, Math.max(32, (artwork.clientWidth - 16) / count * 0.9))
             : Math.min(artwork.clientWidth * 0.72, Math.max(40, (artwork.clientHeight - 16) / count * 0.92))

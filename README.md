@@ -17,7 +17,7 @@
 ## 技术栈
 
 - 后端：Python、FastAPI、LangChain、Chroma
-- 本地模型：Ollama（默认 `qwen2.5vl:7b`、`bge-m3`）
+- 本地模型：Ollama（默认 `qwen2.5vl:3b`、`bge-m3`）
 - 前端：原生 HTML / CSS / JavaScript
 - 三维展示：Three.js（本地静态资源，不依赖 CDN）
 
@@ -34,7 +34,7 @@ python -m venv .venv
 3. 下载所需的本地模型：
 
 ```powershell
-ollama pull qwen2.5vl:7b
+ollama pull qwen2.5vl:3b
 ollama pull bge-m3
 ```
 
