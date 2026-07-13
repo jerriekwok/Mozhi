@@ -272,6 +272,17 @@
     gap: 8px;
 }
 
+<<<<<<< Updated upstream
+=======
+.conversation-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 34px;
+    gap: 6px;
+    align-items: stretch;
+    min-width: 0;
+}
+
+>>>>>>> Stashed changes
 .conversation-item,
 .choice-card {
     width: 100%;
@@ -282,6 +293,35 @@
     transition: background 160ms ease, border-color 160ms ease;
 }
 
+<<<<<<< Updated upstream
+=======
+.conversation-row .conversation-item {
+    min-width: 0;
+}
+
+.conversation-delete {
+    position: relative;
+    z-index: 1;
+    display: inline-grid;
+    width: 34px;
+    min-width: 34px;
+    place-items: center;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    color: var(--color-muted);
+    font-size: 22px;
+    line-height: 1;
+    transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.conversation-delete:hover,
+.conversation-delete:focus-visible {
+    border-color: rgba(163, 59, 46, 0.3);
+    background: rgba(163, 59, 46, 0.08);
+    color: var(--color-primary);
+}
+
+>>>>>>> Stashed changes
 .conversation-item:hover,
 .conversation-item.is-active,
 .choice-card:hover,

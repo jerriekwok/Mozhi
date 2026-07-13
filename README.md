@@ -38,7 +38,11 @@ python -m uvicorn backend.app.main:app --reload
 - 三维展示：Three.js
 =======
 - 后端：Python、FastAPI、LangChain、Chroma
+<<<<<<< Updated upstream
 - 本地模型：Ollama（默认 `qwen2.5:3b`、`bge-m3`）
+=======
+- 本地模型：Ollama（默认 `qwen2.5vl:3b`、`bge-m3`）
+>>>>>>> Stashed changes
 - 前端：原生 HTML / CSS / JavaScript
 - 三维展示：Three.js（本地静态资源，不依赖 CDN）
 >>>>>>> Stashed changes
@@ -61,7 +65,11 @@ python -m uvicorn backend.app.main:app --reload
 3. 下载所需的本地模型：
 
 ```powershell
+<<<<<<< Updated upstream
 ollama pull qwen2.5:3b
+=======
+ollama pull qwen2.5vl:3b
+>>>>>>> Stashed changes
 ollama pull bge-m3
 ```
 

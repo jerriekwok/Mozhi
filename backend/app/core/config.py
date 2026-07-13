@@ -4,6 +4,7 @@ from pydantic_settings import BaseSettings
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
+ENV_FILE = PROJECT_ROOT / ".env"
 
 
 class Settings(BaseSettings):
@@ -11,7 +12,13 @@ class Settings(BaseSettings):
 
     # Ollama 配置
     OLLAMA_BASE_URL: str = "http://localhost:11434"
+<<<<<<< Updated upstream
     LLM_MODEL: str = "qwen2.5:3b"
+=======
+    LLM_MODEL: str = "qwen2.5vl:3b"
+    VISION_MODEL: str = "qwen2.5vl:3b"
+    MODEL_KEEP_ALIVE: str = "-1m"
+>>>>>>> Stashed changes
     EMBEDDING_MODEL: str = "bge-m3"
 
     # Chroma 向量数据库配置
@@ -44,7 +51,7 @@ class Settings(BaseSettings):
         return path.resolve()
 
     class Config:
-        env_file = ".env"
+        env_file =  ".env"
         env_file_encoding = "utf-8"
         extra = "ignore"
 
