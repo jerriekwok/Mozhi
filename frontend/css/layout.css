@@ -417,9 +417,9 @@ body {
 
 .create-toolbar {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-columns: minmax(0, 1fr) auto auto auto;
     gap: 10px;
-    padding: 16px;
+    padding: 14px 16px;
     border-bottom: 1px solid var(--color-line);
     background: rgba(255, 252, 246, 0.74);
 }
@@ -430,7 +430,7 @@ body {
     min-height: 0;
     overflow-y: auto;
     place-items: center;
-    padding: 28px;
+    padding: clamp(12px, 2vw, 24px);
 }
 
 @media (max-width: 1020px) {
@@ -564,11 +564,12 @@ body {
 
     .create-toolbar {
         grid-template-columns: 1fr;
+        padding: 12px;
     }
 
     .artboard-wrap {
         min-height: 0;
         overflow: visible;
-        padding: 18px;
+        padding: 12px;
     }
 }

@@ -241,6 +241,16 @@
                     <div class="create-toolbar">
                         <input id="createTextInput" type="text" maxlength="10" placeholder="输入创作文字（最多 10 字）" aria-label="输入创作文字，最多十个字">
                         <button class="button button--primary" id="generateButton" type="button">开始集字</button>
+                        <fieldset class="direction-toggle" aria-label="选择集字排版方向">
+                            <label>
+                                <input type="radio" name="artworkDirection" value="vertical" checked>
+                                <span>竖排</span>
+                            </label>
+                            <label>
+                                <input type="radio" name="artworkDirection" value="horizontal">
+                                <span>横排</span>
+                            </label>
+                        </fieldset>
                         <button class="button button--ink" id="exportArtworkButton" type="button" disabled>导出 PNG</button>
                     </div>
 
@@ -261,7 +271,7 @@
                             <div class="empty-art">
                                 <span class="seal">集</span>
                                 <h2>集字创作预览区</h2>
-                                <p>选择字帖后输入文字，系统会从本地字库查找真实单字并自动竖排。</p>
+                                <p>选择字帖后输入文字，系统会从本地字库查找真实单字，可选择竖排或横排。</p>
                             </div>
                         </div>
                     </div>

@@ -27,7 +27,13 @@ const state = {
     glyphCharacters: [],
     glyphSelections: [],
     glyphTransforms: [],
-    selectedGlyphIndex: null
+    selectedGlyphIndex: null,
+    artworkDirection: "vertical",
+    artboardSize: {
+        width: null,
+        height: null,
+        touched: false
+    }
 };
 
 const ALLOWED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"];
@@ -36,8 +42,16 @@ const BACKEND_ORIGIN = "http://127.0.0.1:8000";
 let galleryController = null;
 let glyphArtworkVersion = 0;
 let activeGlyphDrag = null;
+let artboardResizeObserver = null;
+let isApplyingArtboardAutoSize = false;
+let isUserResizingArtboard = false;
 const GLYPH_GRID_SIZE = 12;
 const GLYPH_CENTER_SNAP_DISTANCE = 9;
+const ARTBOARD_RESIZE_HOTSPOT = 28;
+const DEFAULT_ARTBOARD_SIZES = {
+    vertical: { width: 420, height: 560 },
+    horizontal: { width: 560, height: 420 }
+};
 
 function createId() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2);
@@ -661,12 +675,14 @@ function renderCreateStatus() {
 function renderArtboard() {
     const artboard = $("#artboard");
     const version = ++glyphArtworkVersion;
+    artboard.classList.toggle("artboard--horizontal", state.artworkDirection === "horizontal");
+    syncArtboardSize();
     if (state.glyphCharacters.length === 0) {
         artboard.innerHTML = `
             <div class="empty-art">
                 <span class="seal">集</span>
                 <h2>集字创作预览区</h2>
-                <p>选择字帖后输入文字，系统会从本地字库查找真实单字并自动竖排。</p>
+                <p>选择字帖后输入文字，系统会从本地字库查找真实单字，可选择竖排或横排。</p>
             </div>
         `;
         syncGlyphEditor();
@@ -697,6 +713,56 @@ function renderArtboard() {
         glyphSelections: state.glyphSelections
     });
     syncGlyphEditor();
+}
+
+function getDefaultArtboardSize() {
+    return DEFAULT_ARTBOARD_SIZES[state.artworkDirection] || DEFAULT_ARTBOARD_SIZES.vertical;
+}
+
+function getDirectionalArtboardSize(direction = state.artworkDirection) {
+    if (!state.artboardSize.touched || !state.artboardSize.width || !state.artboardSize.height) {
+        return DEFAULT_ARTBOARD_SIZES[direction] || DEFAULT_ARTBOARD_SIZES.vertical;
+    }
+    const longSide = Math.max(state.artboardSize.width, state.artboardSize.height);
+    const shortSide = Math.min(state.artboardSize.width, state.artboardSize.height);
+    return direction === "horizontal"
+        ? { width: longSide, height: shortSide }
+        : { width: shortSide, height: longSide };
+}
+
+function syncArtboardSize() {
+    const artboard = $("#artboard");
+    if (!artboard) return;
+    const size = getDirectionalArtboardSize();
+    isApplyingArtboardAutoSize = true;
+    if (size.width) artboard.style.width = `${Math.round(size.width)}px`;
+    if (size.height) artboard.style.height = `${Math.round(size.height)}px`;
+    if (state.artboardSize.touched) {
+        state.artboardSize = {
+            width: size.width,
+            height: size.height,
+            touched: true
+        };
+    }
+    requestAnimationFrame(() => {
+        isApplyingArtboardAutoSize = false;
+    });
+}
+
+function rememberArtboardSize(artboard) {
+    const rect = artboard.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    state.artboardSize = {
+        width: rect.width,
+        height: rect.height,
+        touched: true
+    };
+}
+
+function isArtboardResizePointer(event, artboard) {
+    const rect = artboard.getBoundingClientRect();
+    return event.clientX >= rect.right - ARTBOARD_RESIZE_HOTSPOT
+        && event.clientY >= rect.bottom - ARTBOARD_RESIZE_HOTSPOT;
 }
 
 function defaultGlyphTransform() {
@@ -743,15 +809,23 @@ function layoutGlyphArtwork(artboard) {
     const width = artwork.clientWidth;
     if (!height || !width) return;
 
-    const size = Math.min(width * 0.72, Math.max(72, (height - 16) / state.glyphCharacters.length * 0.92));
+    const isHorizontal = state.artworkDirection === "horizontal";
+    const size = isHorizontal
+        ? Math.min(height * 0.72, Math.max(32, (width - 16) / state.glyphCharacters.length * 0.9))
+        : Math.min(width * 0.72, Math.max(40, (height - 16) / state.glyphCharacters.length * 0.92));
     state.glyphCharacters.forEach((_, index) => {
         const item = artwork.querySelector(`[data-artwork-glyph-index="${index}"]`);
         if (!item) return;
         item.style.setProperty("--glyph-size", `${size}px`);
-        item.style.left = "50%";
-        item.style.top = `${((index + 0.5) / state.glyphCharacters.length) * 100}%`;
+        item.style.left = isHorizontal ? `${((index + 0.5) / state.glyphCharacters.length) * 100}%` : "50%";
+        item.style.top = isHorizontal ? "50%" : `${((index + 0.5) / state.glyphCharacters.length) * 100}%`;
         applyGlyphTransform(index);
     });
+}
+
+function syncArtworkDirectionControl() {
+    const selected = document.querySelector(`input[name="artworkDirection"][value="${state.artworkDirection}"]`);
+    if (selected) selected.checked = true;
 }
 
 function syncGlyphEditor() {
@@ -789,6 +863,7 @@ function renderCreate() {
     renderStyles();
     renderArtboard();
     renderCreateStatus();
+    syncArtworkDirectionControl();
     $("#exportArtworkButton").disabled = state.glyphCharacters.length === 0;
 }
 
@@ -889,13 +964,32 @@ function initCreate() {
         showToast("已填入字帖推荐字句。");
     });
 
+    document.querySelectorAll("input[name='artworkDirection']").forEach((input) => {
+        input.addEventListener("change", (event) => {
+            state.artworkDirection = event.target.value === "horizontal" ? "horizontal" : "vertical";
+            syncArtboardSize();
+            renderArtboard();
+            syncArtworkDirectionControl();
+        });
+    });
+
     const artboard = $("#artboard");
+    if ("ResizeObserver" in window) {
+        artboardResizeObserver = new ResizeObserver(() => {
+            if (isUserResizingArtboard && !isApplyingArtboardAutoSize) rememberArtboardSize(artboard);
+            layoutGlyphArtwork(artboard);
+        });
+        artboardResizeObserver.observe(artboard);
+    }
+
     artboard.addEventListener("pointerdown", (event) => {
         const item = event.target.closest("[data-artwork-glyph-index]");
         if (!item) {
+            isUserResizingArtboard = isArtboardResizePointer(event, artboard);
             clearArtworkSelection();
             return;
         }
+        isUserResizingArtboard = false;
         const index = Number(item.dataset.artworkGlyphIndex);
         const transform = getGlyphTransform(index);
         selectArtworkGlyph(index);
@@ -920,6 +1014,10 @@ function initCreate() {
     });
 
     const finishGlyphDrag = (event) => {
+        if (isUserResizingArtboard) {
+            rememberArtboardSize(artboard);
+            isUserResizingArtboard = false;
+        }
         if (!activeGlyphDrag || activeGlyphDrag.pointerId !== event.pointerId) return;
         const item = event.target.closest("[data-artwork-glyph-index]");
         if (item?.hasPointerCapture(event.pointerId)) item.releasePointerCapture(event.pointerId);
@@ -927,6 +1025,14 @@ function initCreate() {
     };
     artboard.addEventListener("pointerup", finishGlyphDrag);
     artboard.addEventListener("pointercancel", finishGlyphDrag);
+    window.addEventListener("pointerup", () => {
+        if (!isUserResizingArtboard) return;
+        rememberArtboardSize(artboard);
+        isUserResizingArtboard = false;
+    });
+    window.addEventListener("pointercancel", () => {
+        isUserResizingArtboard = false;
+    });
 
     artboard.addEventListener("wheel", (event) => {
         const item = event.target.closest("[data-artwork-glyph-index]");
@@ -1003,14 +1109,15 @@ function initCreate() {
         button.disabled = true;
         button.textContent = "正在导出…";
         try {
-            await exportArtworkPng({
+            const exportSize = await exportArtworkPng({
                 artboard: $("#artboard"),
                 glyphCharacters: state.glyphCharacters,
                 glyphSelections: state.glyphSelections,
                 getGlyphTransform,
-                title: $("#createTextInput").value
+                title: $("#createTextInput").value,
+                direction: state.artworkDirection
             });
-            showToast("已导出 1800 × 2400 PNG。");
+            showToast(`已按当前画板尺寸导出 ${exportSize.width} × ${exportSize.height} PNG。`);
         } catch (error) {
             showToast(error.message || "导出失败，请稍后重试。");
         } finally {

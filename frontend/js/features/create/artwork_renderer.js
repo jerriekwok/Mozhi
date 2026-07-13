@@ -72,23 +72,33 @@ export async function drawArtworkPreview({ artboard, version, getCurrentVersion,
     });
 }
 
-function getArtworkLayout(artboard, glyphCharacters) {
+function getArtworkLayout(artboard, glyphCharacters, direction = "vertical") {
     const artwork = artboard.querySelector(".glyph-artwork");
     const count = glyphCharacters.length;
     if (!artwork || !count || !artwork.clientWidth || !artwork.clientHeight) return null;
+    const isHorizontal = direction === "horizontal";
+    const artboardRect = artboard.getBoundingClientRect();
     return {
+        artboardWidth: artboardRect.width || artboard.clientWidth,
+        artboardHeight: artboardRect.height || artboard.clientHeight,
         width: artwork.clientWidth,
         height: artwork.clientHeight,
-        glyphSize: Math.min(artwork.clientWidth * 0.72, Math.max(72, (artwork.clientHeight - 16) / count * 0.92))
+        offsetX: artwork.offsetLeft,
+        offsetY: artwork.offsetTop,
+        glyphSize: isHorizontal
+            ? Math.min(artwork.clientHeight * 0.72, Math.max(32, (artwork.clientWidth - 16) / count * 0.9))
+            : Math.min(artwork.clientWidth * 0.72, Math.max(40, (artwork.clientHeight - 16) / count * 0.92))
     };
 }
 
-export async function exportArtworkPng({ artboard, glyphCharacters, glyphSelections, getGlyphTransform, title }) {
-    const layout = getArtworkLayout(artboard, glyphCharacters);
+export async function exportArtworkPng({ artboard, glyphCharacters, glyphSelections, getGlyphTransform, title, direction = "vertical" }) {
+    const layout = getArtworkLayout(artboard, glyphCharacters, direction);
     if (!layout) throw new Error("请先生成集字作品。");
 
-    const exportWidth = 1800;
-    const exportHeight = 2400;
+    const isHorizontal = direction === "horizontal";
+    const pixelRatio = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
+    const exportWidth = Math.max(1, Math.round(layout.artboardWidth * pixelRatio));
+    const exportHeight = Math.max(1, Math.round(layout.artboardHeight * pixelRatio));
     const output = document.createElement("canvas");
     output.width = exportWidth;
     output.height = exportHeight;
@@ -100,13 +110,13 @@ export async function exportArtworkPng({ artboard, glyphCharacters, glyphSelecti
 
     const entries = await loadArtworkEntries(glyphCharacters, glyphSelections);
     const medianMass = getMedianVisualMass(entries);
-    const exportScaleX = exportWidth / layout.width;
-    const exportScaleY = exportHeight / layout.height;
+    const exportScaleX = exportWidth / layout.artboardWidth;
+    const exportScaleY = exportHeight / layout.artboardHeight;
     const glyphExportScale = Math.min(exportScaleX, exportScaleY);
 
     entries.forEach((entry) => {
-        const baseX = layout.width / 2;
-        const baseY = ((entry.index + 0.5) / entries.length) * layout.height;
+        const baseX = layout.offsetX + (isHorizontal ? ((entry.index + 0.5) / entries.length) * layout.width : layout.width / 2);
+        const baseY = layout.offsetY + (isHorizontal ? layout.height / 2 : ((entry.index + 0.5) / entries.length) * layout.height);
         const transform = getGlyphTransform(entry.index);
         context.save();
         context.translate((baseX + transform.x) * exportScaleX, (baseY + transform.y) * exportScaleY);
@@ -137,4 +147,5 @@ export async function exportArtworkPng({ artboard, glyphCharacters, glyphSelecti
     link.href = output.toDataURL("image/png");
     link.download = `${filename}-墨智集字.png`;
     link.click();
+    return { width: exportWidth, height: exportHeight };
 }
