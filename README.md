@@ -39,7 +39,11 @@ python -m uvicorn backend.app.main:app --reload
 =======
 - 后端：Python、FastAPI、LangChain、Chroma
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 - 本地模型：Ollama（默认 `qwen2.5:3b`、`bge-m3`）
+=======
+- 本地模型：Ollama（默认 `qwen2.5vl:3b`、`bge-m3`）
+>>>>>>> Stashed changes
 =======
 - 本地模型：Ollama（默认 `qwen2.5vl:3b`、`bge-m3`）
 >>>>>>> Stashed changes
@@ -66,7 +70,11 @@ python -m uvicorn backend.app.main:app --reload
 
 ```powershell
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 ollama pull qwen2.5:3b
+=======
+ollama pull qwen2.5vl:3b
+>>>>>>> Stashed changes
 =======
 ollama pull qwen2.5vl:3b
 >>>>>>> Stashed changes

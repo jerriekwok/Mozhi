@@ -13,8 +13,11 @@ class Settings(BaseSettings):
     # Ollama 配置
     OLLAMA_BASE_URL: str = "http://localhost:11434"
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     LLM_MODEL: str = "qwen2.5:3b"
 =======
+=======
+>>>>>>> Stashed changes
     LLM_MODEL: str = "qwen2.5vl:3b"
     VISION_MODEL: str = "qwen2.5vl:3b"
     MODEL_KEEP_ALIVE: str = "-1m"

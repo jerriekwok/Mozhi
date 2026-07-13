@@ -152,7 +152,11 @@ Content-Type: application/json
 ```
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 字段说明：
+=======
+`uploadId` 与 `imageUrl` 至少提供一个。接口会调用本地 `qwen2.5vl:3b` 分析图片中的章法、结构和用笔；结果用于练习参考，不是专业书法鉴定或权威评分。
+>>>>>>> Stashed changes
 =======
 `uploadId` 与 `imageUrl` 至少提供一个。接口会调用本地 `qwen2.5vl:3b` 分析图片中的章法、结构和用笔；结果用于练习参考，不是专业书法鉴定或权威评分。
 >>>>>>> Stashed changes
