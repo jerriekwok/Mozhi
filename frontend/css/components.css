@@ -772,17 +772,78 @@
     border-color: rgba(163, 59, 46, 0.45);
 }
 
+.direction-toggle {
+    display: inline-grid;
+    grid-template-columns: repeat(2, minmax(48px, 1fr));
+    min-inline-size: 0;
+    min-height: 42px;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-sm);
+    background: rgba(255, 252, 246, 0.86);
+}
+
+.direction-toggle label {
+    position: relative;
+    display: grid;
+    cursor: pointer;
+}
+
+.direction-toggle input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.direction-toggle span {
+    display: grid;
+    min-width: 52px;
+    min-height: 40px;
+    place-items: center;
+    padding: 0 16px;
+    color: var(--color-ink-soft);
+    font-size: inherit;
+    font-weight: 800;
+}
+
+.direction-toggle label + label span {
+    border-left: 1px solid var(--color-line);
+}
+
+.direction-toggle input:checked + span {
+    background: var(--color-ink);
+    color: var(--color-rice);
+}
+
 .artboard {
     display: grid;
-    width: min(620px, 100%);
-    aspect-ratio: 3 / 4;
+    width: min(420px, 100%);
+    height: clamp(240px, calc(100vh - var(--header-height) - 170px), 560px);
+    min-width: 280px;
+    min-height: 240px;
+    max-width: 100%;
+    max-height: max(240px, calc(100vh - var(--header-height) - 170px));
+    overflow: hidden;
     place-items: center;
     border-radius: var(--radius-md);
+    resize: both;
+}
+
+.artboard--horizontal {
+    width: min(560px, 100%);
+    height: clamp(240px, calc(100vh - var(--header-height) - 170px), 420px);
 }
 
 .glyph-artwork {
     position: relative;
-    width: min(82%, 430px);
+    width: 88%;
+    height: 88%;
+}
+
+.artboard--horizontal .glyph-artwork {
+    width: 88%;
     height: 88%;
 }
 
@@ -988,10 +1049,6 @@
 
     .send-button {
         min-width: 96px;
-    }
-
-    .artboard {
-        min-height: 420px;
     }
 
     .create-status {
